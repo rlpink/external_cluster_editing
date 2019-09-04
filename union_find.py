@@ -1,13 +1,15 @@
-import numpy
+import numpy as np
+from numba import jit, njit
 
 def initialize_union_find(n):
-    uf_parent = numpy.arange(n, dtype=numpy.int64)
-    uf_size = numpy.ones(n, dtype=numpy.int64)
-    return (uf_parent, uf_size)
+    uf_parent = np.arange(n, dtype=np.int64)
+    uf_size = np.ones(n, dtype=np.int64)
+    return np.asarray((uf_parent, uf_size))
+
 
 #note: parent is the uf_parent part of the union find structure
-def find(x, uf):
-    parent = uf[0]
+@njit
+def find(x, parent):
 
     while x != parent[x]:
         #path compression (halving):
@@ -15,13 +17,13 @@ def find(x, uf):
         x = parent[x]
     return(x)
 
-def union(x, y, uf):
+
+@njit
+def union(x, y, parent, size):
     set_x = find(x, uf)
     #print("set_x ", set_x, " x ", x)
     set_y = find(y, uf)
     #print("set_y ", set_y, " y ", y)
-    parent = uf[0]
-    size = uf[1]
 
     if set_x == set_y:
         #print("equal")

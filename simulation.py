@@ -4,7 +4,7 @@
 import random
 from math import log
 import sys
-import numpy
+import numpy as np
 from numba import jit, njit
 from numpy import random as rand
 
@@ -12,9 +12,9 @@ from numpy import random as rand
 
 #######################################################
 def initialize_union_find(n):
-    uf_parent = numpy.arange(n, dtype=numpy.int64)
-    uf_size = numpy.ones(n, dtype=numpy.int64)
-    return numpy.asarray((uf_parent, uf_size))
+    uf_parent = np.arange(n, dtype=np.int64)
+    uf_size = np.ones(n, dtype=np.int64)
+    return np.asarray((uf_parent, uf_size))
 
 
 #note: parent is the uf_parent part of the union find structure
@@ -54,8 +54,8 @@ def union(x, y, uf):
 #######################################################
 @njit
 def generate_edges(n):
-    max_edges = numpy.int64((n * (n-1)) / 2)
-    edges = numpy.zeros((max_edges,2), dtype=numpy.int64)
+    max_edges = np.int64((n * (n-1)) / 2)
+    edges = np.zeros((max_edges,2), dtype=np.int64)
     k = 0
     for v1 in range(0,n):
         for v2 in range(0,v1):
@@ -88,6 +88,16 @@ def sim_single_run_connected(n,p, edges):
 
 def asymptotic_p(n,factor):
     return (factor*log(n))/(n-1) # factor: (1+epsilon)
+
+def model_sqrt(n):
+    # Parameters fitted for 99.9% quantile of necessary edges for connectivity
+    a = 3.484291
+    b =  -2.983427
+    c = -12.853034
+    edges = (0.5 * n * np.log(n)) + (a * n) + b * np.sqrt(n) + c
+    max_edges = n * (n-1) / 2
+
+    return edges / max_edges
 
 
 def sim_connectivity_rate(n,p,repetitions):
@@ -122,8 +132,8 @@ def sim_until_connected(n):
 #sim_uc_jit = numba.jit("i4(f8)")(sim_until_connected)
 
 # for lido experiments:
-arg_n = int(sys.argv[1])
-rand.seed(1234)
-for i in range(0,10000):
-    print(sim_until_connected(arg_n))
+# arg_n = int(sys.argv[1])
+# rand.seed(1234)
+# for i in range(0,10000):
+#     print(sim_until_connected(arg_n))
 
