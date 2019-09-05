@@ -27,7 +27,7 @@ def union(x, y, parent, size):
 
     if set_x == set_y:
         #print("equal")
-        return
+        return False
 
     if size[set_x] <= size[set_y]:
         parent[set_x] = set_y
@@ -38,3 +38,11 @@ def union(x, y, parent, size):
         parent[set_y] = set_x
         size[set_x] = size[set_x] + size[set_y]
         #print("set size")
+    return True
+
+#path compression for flattened uf-trees
+def flattening_find(x, parent):
+
+    while x != parent[x]:
+        parent[x] = flattening_find(parent[x],parent)
+    return parent[x]
