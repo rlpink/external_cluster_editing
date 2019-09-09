@@ -22,13 +22,11 @@ def generate_edges(n, offset):
     return edges
 
 # deletion_factor stellt ein, wie viele Kanten jeder Knoten maximal verliert
-def disturb_cluster(n, offset, edges, deletion_factor):
+def disturb_cluster(n, offset, edges, deletion_factor, file):
     rand_edges = rand.permutation(edges)
     vertexwise_del_edges = np.zeros(n, dtype=np.int64)
     max_edges_out = deletion_factor * n
     i = 0
-
-    file = open("graph_sim.txt", mode="a")
 
     for e in rand_edges:
         weight = 1
@@ -43,6 +41,7 @@ def disturb_cluster(n, offset, edges, deletion_factor):
             i += 1
         file.write("%d %d %d \n" % (e[0], e[1], weight))
 
+@njit
 def max_edges_in(i, cluster_bounds, insertion_factor):
     for j in range(1, len(cluster_bounds)):
         if(i < cluster_bounds[j] and i >= cluster_bounds[j-1]):
@@ -50,6 +49,7 @@ def max_edges_in(i, cluster_bounds, insertion_factor):
     n_c = cluster_bounds[j] - cluster_bounds[j-1]
     return np.int64(n_c * insertion_factor)
 
+@njit
 def get_cluster_bounds(i, cluster_bounds):
     #todo: speed-up durch binary search
     for j in range(1, len(cluster_bounds)):
@@ -57,8 +57,7 @@ def get_cluster_bounds(i, cluster_bounds):
             break
     return np.array([cluster_bounds[j-1], cluster_bounds[j]], dtype=np.int64)
 
-def additional_edges(cluster_bounds, insertion_factor):
-    file = open("graph_sim.txt", mode="a")
+def additional_edges(cluster_bounds, insertion_factor, file):
     n = cluster_bounds[len(cluster_bounds)-1]
     vertexwise_ins_edges = np.zeros(n, dtype=np.int64)
     vertexwise_max_edges = np.zeros(n, dtype=np.int64)
@@ -77,11 +76,17 @@ def additional_edges(cluster_bounds, insertion_factor):
                 vertexwise_ins_edges[v1] += 1
                 vertexwise_ins_edges[v2] += 1
 
-def simulate_graph(cluster_sizes, del_factor, ins_factor):
-    cluster_boundaries = np.cumsum([0]+cluster_sizes)
-    for c in range(0, len(cluster_sizes)):
-        n_c = cluster_sizes[c]
-        offset_c = cluster_boundaries[c]
-        edges_c = generate_edges(n_c, offset_c)
-        disturb_cluster(n_c, offset_c, edges_c, del_factor)
-    additional_edges(cluster_boundaries, ins_factor)
+# cluster_sizes is formatted: np.array([0,<cluster_size1>,...,<cluster_sizek>])
+def simulate_graph(seed, cluster_sizes, del_factor, ins_factor):
+    rand.seed(seed)
+    cluster_boundaries = np.cumsum(cluster_sizes)
+    with open("graph_sim.txt", mode="a") as file:
+        file.write("seed: %d\n" % seed)
+        for c in range(0, len(cluster_sizes)-1):
+            n_c = cluster_sizes[c+1]
+            offset_c = cluster_boundaries[c]
+            edges_c = generate_edges(n_c, offset_c)
+            disturb_cluster(n_c, offset_c, edges_c, del_factor, file)
+        additional_edges(cluster_boundaries, ins_factor, file)
+
+simulate_graph(123, np.array([0,30,30,30]), 2/9, 2/9)
