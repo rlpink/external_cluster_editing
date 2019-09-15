@@ -70,7 +70,7 @@ def additional_edges(cluster_bounds, insertion_factor):
     for v1 in rand.permutation(np.arange(0,n)):
         lower = get_cluster_bounds(v1, cluster_bounds)[0]
         upper = get_cluster_bounds(v1, cluster_bounds)[1]
-        v2_arr = np.zeros((lower + (n-lower)), dtype= np.int64)
+        v2_arr = np.zeros((lower + (n-upper)), dtype= np.int64)
         k = 0
         for j in range(0, len(v2_arr)):
             if j < lower:
@@ -99,4 +99,11 @@ def simulate_graph(seed, cluster_sizes, del_factor, ins_factor):
         disturb_cluster(n_c, offset_c, edges_c, del_factor)
     additional_edges(cluster_boundaries, ins_factor)
 
-simulate_graph(123, np.array([0,30,30,30]), 2/9, 2/9)
+def generate_clusterarray(k_cluster, cluster_size):
+    result = np.zeros(k_cluster + 1, dtype = np.int32)
+    for i in range(1,len(result)):
+        result[i] = cluster_size
+    return result
+
+clusters = generate_clusterarray(1000, 100)
+simulate_graph(123, clusters, 2/9, 2/9)
