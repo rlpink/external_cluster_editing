@@ -95,9 +95,9 @@ def sim_connectivity_rate(n,p,repetitions):
             success_count = success_count + 1
     return success_count / repetitions
 
+
 @njit
 def sim_until_connected(n):
-    #("i4(f8)")
     uf_struct = initialize_union_find(n)
     edges = generate_edges(n)
     edge_count = int(0)
@@ -115,12 +115,27 @@ def sim_until_connected(n):
 
     return int(-1)
 
-#initialize_union_find_jit = numba.jit()(initialize_union_find)
-#sim_uc_jit = numba.jit("i4(f8)")(sim_until_connected)
+@njit
+def sim_until_nearly_connected(n, p):
+    uf_struct = initialize_union_find(n)
+    edges = generate_edges(n)
+    edge_count = int(0)
+    # iterate over edge index (via edges.shape[0] array)
+    for e in rand.permutation(edges.shape[0]):
+        v1 = edges[e][0]
+        v2 = edges[e][1]
+
+        union(v1, v2, uf_struct)
+        edge_count = edge_count + 1
+        # if size of the parent of one of the nodes (now connected = same parent) is n,
+        # graph is connected
+        if uf_struct[1][find(v1, uf_struct)] >= np.int64(n*p):
+            return edge_count
+
 
 # for lido experiments:
-# arg_n = int(sys.argv[1])
-# rand.seed(1234)
-# for i in range(0,10000):
-#     print(sim_until_connected(arg_n))
+arg_n = int(sys.argv[1])
+rand.seed(1234)
+for i in range(0,10000):
+    print(sim_until_nearly_connected(arg_n, 0.9))
 

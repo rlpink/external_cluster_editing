@@ -5,16 +5,7 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-
-def best_solution(solution_costs, parents, filename, missing_weight, n, x):
-    costs = solution_costs.min()
-    best = parents[solution_costs.argmin()]
-    file = open("result.txt", mode="a")
-    with file:
-        file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions generated): %d\nbest solution found:\n" % (filename, missing_weight, n, x))
-        file.write(f"costs: {costs}\n")
-        for i in range(0,n):
-            file.write(f"{best[i]} ")
+from merging_methods import *
 
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
 # <Nummer Knoten 1> <Nummer Knoten 2> <Gewicht der Kante>
@@ -31,6 +22,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     print("Begin preprocessing\n")
 # Knotengrade berechnen je Knoten (Scan über alle Kanten)
     node_dgr = np.zeros(n, dtype=np.int64)
+    #Erste Zeile (enthält Seed) überspringen
+    graph_file.readline()
 
     for line in graph_file:
         splitted = line.split()
@@ -53,6 +46,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 
 # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
     graph_file = open(filename, mode="r")
+    #Erste Zeile (enthält Seed) überspringen
+    graph_file.readline()
 
     for line in graph_file:
         splitted = line.split()
@@ -101,6 +96,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 
 # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
     graph_file = open(filename, mode="r")
+    graph_file.readline()
 
     for line in graph_file:
         splitted = line.split()
@@ -131,8 +127,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
             missing_edges = c_edge_counter[i][c]
             if missing_edges > 0:
                 # Kosten für komplett fehlende Kanten zur Lösung addieren
-                cluster_costs[i][c] += missing_edges * missing_weight
-                solution_costs[i] += missing_edges * missing_weight
+                cluster_costs[i][c] += missing_edges * (-missing_weight)
+                solution_costs[i] += missing_edges * (-missing_weight)
 
 
 ### Solution Merge ###
@@ -140,7 +136,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 # Mithilfe der Bewertungen/Kosten Lösungen sinnvoll mergen/reparieren
 # Platzhalter: Beste Lösung direkt übernehmen
     print("begin solution merge")
-    best_solution(solution_costs, parents, filename, missing_weight, n, x)
+    #best_solution(solution_costs, parents, filename, missing_weight, n, x)
+    all_solutions(solution_costs, parents, filename, missing_weight, n, x)
 
 # Summe der Kosten von Lösungen mit "A und B sind in einer ZHK" (=(A,B) in Lösung) vs. summierte Kosten für "A und B sind in verschiedenen ZHK"-Lösungen. Wähle Kante dann zufällig mit Gewichtung durch die Kosten (bspw (A,B) e L* "kostet" 4930, (A,B) -e L* "kostet" nur 1320. Dann teile (0,1) in Annahmebereich (0, 4930 / (4930 + 1320)) und Ablehnungsbereich (4930 / (4930 + 1320), 1). Würfle gleichverteilte Zufallszahl aus (0,1) und je nach Ausprägung (kleiner/ größer als der Grenzwert) füge Kante hinzu oder nicht.
 
