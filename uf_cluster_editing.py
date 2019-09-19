@@ -1,20 +1,10 @@
 from union_find import *
-import random
 from math import log
 import sys
 import numpy as np
-from numba import jit
+from numba import njit, jit
 from numpy import random as rand
-
-def model_sqrt(n):
-    # Parameters fitted for 99.9% quantile of necessary edges for connectivity
-    a = 3.484291
-    b =  -2.983427
-    c = -12.853034
-    edges = (0.5 * n * np.log(n)) + (a * n) + b * np.sqrt(n) + c
-    max_edges = n * (n-1) / 2
-
-    return edges / max_edges
+from model_sqrt import *
 
 def best_solution(solution_costs, parents, filename, missing_weight, n, x):
     costs = solution_costs.min()
@@ -59,6 +49,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.ones((x,n), dtype=np.int64)
     cluster_count = np.full(x, n, dtype=np.int64)
+    #model_quantile = np.full(x, 0.5)
 
 # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
     graph_file = open(filename, mode="r")
@@ -69,11 +60,13 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
         weight = np.float64(splitted[2])
 
         guess_n = (node_dgr[nodes[0]] + node_dgr[nodes[1]]) / 2
-        sampling_rate = model_sqrt(guess_n)
+        # Samplingrate ermitteln
+        sampling_rate = model_sqrt(guess_n,0.5)
 
         decision_values = rand.rand(x)
         for i in range(0, x):
             # Falls Kante gesamplet...
+            # sampling_rate = model_sqrt(guess_n, model_quantile[i])
             if decision_values[i] < sampling_rate:
                 # ...füge Kante ein in UF-Struktur
                 # Falls "echte" Vereinigung (zwei vorher verschiedene Cluster)...
@@ -86,7 +79,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 # Nachbearbeitung aller Lösungen: Flache Struktur (= Knoten in selbem Cluster haben selben Eintrag im Array)
 # Und Berechnung benötigter Kanten je Cluster (n_c * (n_c-1) / 2) pro UF
     print("begin solution assessment")
-    #todo: fix flattening_find
     solution_costs = np.zeros(x, dtype=np.float64)
 
     #todo: dict(dict(...)) oder np.array(dict(...))?

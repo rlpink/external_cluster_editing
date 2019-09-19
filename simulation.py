@@ -7,6 +7,7 @@ import sys
 import numpy as np
 from numba import jit, njit
 from numpy import random as rand
+from model_sqrt import *
 
 #uf = importlib.import_module('uf.union_find')
 
@@ -84,20 +85,6 @@ def sim_single_run_connected(n,p, edges):
     #     if vertex == n-1:
     #         return True
    ##   return False
-
-
-def asymptotic_p(n,factor):
-    return (factor*log(n))/(n-1) # factor: (1+epsilon)
-
-def model_sqrt(n):
-    # Parameters fitted for 99.9% quantile of necessary edges for connectivity
-    a = 3.484291
-    b =  -2.983427
-    c = -12.853034
-    edges = (0.5 * n * np.log(n)) + (a * n) + b * np.sqrt(n) + c
-    max_edges = n * (n-1) / 2
-
-    return edges / max_edges
 
 
 def sim_connectivity_rate(n,p,repetitions):

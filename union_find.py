@@ -18,7 +18,7 @@ def find(x, parent):
     return(x)
 
 
-#@njit
+@njit
 def union(x, y, parent, size):
     set_x = find(x, parent)
     #print("set_x ", set_x, " x ", x)
@@ -41,6 +41,7 @@ def union(x, y, parent, size):
     return True
 
 #path compression for flattened uf-trees
+@njit
 def flattening_find(x, parent):
     if x != parent[x]:
         parent[x] = flattening_find(parent[x],parent)
