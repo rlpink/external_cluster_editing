@@ -23,3 +23,40 @@ def model_sqrt(n, quantile):
     max_edges = n * (n-1) / 2
 
     return edges / max_edges
+
+def model_flexible(n, connectivity):
+    # defined only for 0.999%-quantile
+    # connectivity is the expected minimum connectivity rate
+    if connectivity == 0.9:
+        a, b, c, d = -0.007560676,  1.347482858,  3.281456663,  2.067671992
+    elif connectivity == 0.5:
+        a, b, c, d = 0.03601871,  0.36608633,  4.61962889, -9.06528983
+    edges = a * n * np.log(n) + b * n + c * np.sqrt(n) + d
+    max_edges = n * (n-1) / 2
+
+
+    return edges / max_edges
+
+# connectivity in this model is between 1 and 35 and corresponds to
+# the expected max clique size in terms that 0 has a max clique size of at least (0.05 * n)
+# and an increase of 1 in connectivity increases max clique size from at least (x*n) to (x+0.025)*n
+# so that the maximum least max clique size that can be expected lies at (0.9*n).
+def model_flexible_v2(n, connectivity):
+    if connectivity == 35:
+        a, b, c, d = -0.007560676,  1.347482858,  3.281456663,  2.067671992
+    else:
+        with open('model_parameters.csv', mode='r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            line_ind = 1
+            for line in csv_reader:
+                if line_ind != connectivity:
+                    line_ind += 1
+                else:
+                    a, b = np.float64(line["a"]), np.float64(line["b"])
+                    c, d = np.float64(line["c"]), np.float64(line["d"])
+                    break
+
+    edges = a * n * np.log(n) + b * n + c * np.sqrt(n) + d
+    max_edges = n * (n-1) / 2
+
+    return edges / max_edges

@@ -24,6 +24,7 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
         file.write("filename: %s \nmissing_weight: %f \nn: %d\n" % (filename, missing_weight, n))
         for i in cost_sorted_i:
             file.write("%d. best solution with cost %f\n" % (count, solution_costs[i]))
+            count += 1
             for j in range(0,n):
                 file.write(f"{parents[i][j]} ")
             file.write("\n")

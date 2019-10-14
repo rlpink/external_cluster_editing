@@ -7,7 +7,6 @@ import sys
 import numpy as np
 from numba import jit, njit
 from numpy import random as rand
-from model_sqrt import *
 
 #uf = importlib.import_module('uf.union_find')
 
@@ -95,8 +94,6 @@ def sim_connectivity_rate(n,p,repetitions):
             success_count = success_count + 1
     return success_count / repetitions
 
-
-@njit
 def sim_until_connected(n):
     uf_struct = initialize_union_find(n)
     edges = generate_edges(n)
@@ -115,7 +112,6 @@ def sim_until_connected(n):
 
     return int(-1)
 
-@njit
 def sim_until_nearly_connected(n, p):
     uf_struct = initialize_union_find(n)
     edges = generate_edges(n)
@@ -136,6 +132,8 @@ def sim_until_nearly_connected(n, p):
 # for lido experiments:
 arg_n = int(sys.argv[1])
 rand.seed(1234)
-for i in range(0,10000):
-    print(sim_until_nearly_connected(arg_n, 0.9))
+for perc in np.arange(0.05,0.9, 0.025):
+    for i in range(0,10000):
+        print(sim_until_nearly_connected(arg_n, perc), end= ' ')
+    print("")
 

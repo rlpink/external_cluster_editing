@@ -22,10 +22,11 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     print("Begin preprocessing\n")
 # Knotengrade berechnen je Knoten (Scan über alle Kanten)
     node_dgr = np.zeros(n, dtype=np.int64)
-    #Erste Zeile (enthält Seed) überspringen
-    graph_file.readline()
 
     for line in graph_file:
+        # Kommentar-Zeilen überspringen
+        if line[0] == "#":
+            continue
         splitted = line.split()
         nodes = np.array(splitted[:-1], dtype=np.int64)
         weight = np.float64(splitted[2])
@@ -46,17 +47,18 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 
 # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
     graph_file = open(filename, mode="r")
-    #Erste Zeile (enthält Seed) überspringen
-    graph_file.readline()
 
     for line in graph_file:
+        # Kommentar-Zeilen überspringen
+        if line[0] == "#":
+            continue
         splitted = line.split()
         nodes = np.array(splitted[:-1], dtype=np.int64)
         weight = np.float64(splitted[2])
 
         guess_n = (node_dgr[nodes[0]] + node_dgr[nodes[1]]) / 2
         # Samplingrate ermitteln
-        sampling_rate = model_sqrt(guess_n,0.5)
+        sampling_rate = model_flexible(guess_n, 0.9)
 
         decision_values = rand.rand(x)
         for i in range(0, x):
@@ -96,9 +98,11 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 
 # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
     graph_file = open(filename, mode="r")
-    graph_file.readline()
 
     for line in graph_file:
+        # Kommentar-Zeilen überspringen
+        if line[0] == "#":
+            continue
         splitted = line.split()
         nodes = np.array(splitted[:-1], dtype=np.int64)
         weight = np.float64(splitted[2])

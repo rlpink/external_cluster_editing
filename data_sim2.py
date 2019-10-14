@@ -91,7 +91,9 @@ def additional_edges(cluster_bounds, insertion_factor):
 def simulate_graph(seed, cluster_sizes, del_factor, ins_factor):
     rand.seed(seed)
     cluster_boundaries = np.cumsum(cluster_sizes)
-    print("seed:", seed)
+    print("#seed:", seed)
+    print("#deletion factor:", del_factor)
+    print("#insertion factor:", ins_factor)
     for c in range(0, len(cluster_sizes)-1):
         n_c = cluster_sizes[c+1]
         offset_c = cluster_boundaries[c]
@@ -105,5 +107,5 @@ def generate_clusterarray(k_cluster, cluster_size):
         result[i] = cluster_size
     return result
 
-clusters = generate_clusterarray(1000, 100)
+clusters = generate_clusterarray(10, 30)
 simulate_graph(123, clusters, 2/9, 2/9)
