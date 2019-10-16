@@ -1,4 +1,5 @@
 import numpy as np
+import csv
 
 def model_sqrt(n, quantile):
     # Parameters fitted for 99.9% quantile of necessary edges for connectivity

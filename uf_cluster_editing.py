@@ -6,6 +6,7 @@ from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
 from merging_methods import *
+import csv
 
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
 # <Nummer Knoten 1> <Nummer Knoten 2> <Gewicht der Kante>
@@ -42,8 +43,19 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     print("begin solution generation")
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.ones((x,n), dtype=np.int64)
-    cluster_count = np.full(x, n, dtype=np.int64)
-    #model_quantile = np.full(x, 0.5)
+    #cluster_count = np.full(x, n, dtype=np.int64)
+    # Alle Parameter für die Modelle festlegen:
+    cluster_model = np.full(x,17)
+    k = int(x/35)
+    j = 0
+    c = 1
+
+    for i in range(0,x):
+        cluster_model[i] = c
+        j += 1
+        if j == k:
+            c += 1
+            j = 0
 
 # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
     graph_file = open(filename, mode="r")
@@ -57,19 +69,19 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
         weight = np.float64(splitted[2])
 
         guess_n = (node_dgr[nodes[0]] + node_dgr[nodes[1]]) / 2
-        # Samplingrate ermitteln
-        sampling_rate = model_flexible(guess_n, 0.9)
 
         decision_values = rand.rand(x)
         for i in range(0, x):
+        # Samplingrate ermitteln
+            sampling_rate = model_flexible_v2(guess_n, cluster_model[i])
             # Falls Kante gesamplet...
-            # sampling_rate = model_sqrt(guess_n, model_quantile[i])
             if decision_values[i] < sampling_rate:
                 # ...füge Kante ein in UF-Struktur
                 # Falls "echte" Vereinigung (zwei vorher verschiedene Cluster)...
-                if union(nodes[0], nodes[1], parents[i], sizes[i]):
+                #if union(nodes[0], nodes[1], parents[i], sizes[i]):
+                union(nodes[0], nodes[1], parents[i], sizes[i])
                     #...reduziere Anzahl Cluster in der Lösung:
-                    cluster_count[i] = cluster_count[i] - 1
+                    #cluster_count[i] = cluster_count[i] - 1
 
 
 ### Solution Assessment ###
@@ -78,11 +90,9 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     print("begin solution assessment")
     solution_costs = np.zeros(x, dtype=np.float64)
 
-    #todo: dict(dict(...)) oder np.array(dict(...))?
     #cluster_costs = dict()
     cluster_costs = np.empty(x, dtype='O')
     c_edge_counter = np.empty(x, dtype='O')
-    # Ende von todo
 
     for i in range(0,x):
         cluster_costs[i] = dict()
