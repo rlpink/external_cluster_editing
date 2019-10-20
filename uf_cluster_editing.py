@@ -16,9 +16,12 @@ import csv
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
 
-def unionfind_cluster_editing(filename, missing_weight, n, x):
+def unionfind_cluster_editing(filename, missing_weight, n, budget):
     graph_file = open(filename, mode="r")
-
+    x = np.int64(budget * 0.15)
+    #TODO Budget splitting, c_opt-Filter, neue Lösungen generieren
+    if x < 35:
+        print("Budget too low, try bigger budget (at least 235)")
 ### Preprocessing ###
     print("Begin preprocessing\n")
 # Knotengrade berechnen je Knoten (Scan über alle Kanten)
@@ -87,63 +90,74 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 ### Solution Assessment ###
 # Nachbearbeitung aller Lösungen: Flache Struktur (= Knoten in selbem Cluster haben selben Eintrag im Array)
 # Und Berechnung benötigter Kanten je Cluster (n_c * (n_c-1) / 2) pro UF
-    print("begin solution assessment")
-    solution_costs = np.zeros(x, dtype=np.float64)
+#FIXME Edgecounter does NOT WORK CORRECTLY yet. fix it pls. negative missing edges!!
+    def calculate_costs(solutions_parents, x, merged):
+        if merged:
+            inner_sizes = merged_sizes
+        else:
+            inner_sizes = sizes
+        print("begin solution assessment")
+        solution_costs = np.zeros(x, dtype=np.float64)
 
-    #cluster_costs = dict()
-    cluster_costs = np.empty(x, dtype='O')
-    c_edge_counter = np.empty(x, dtype='O')
-
-    for i in range(0,x):
-        cluster_costs[i] = dict()
-        c_edge_counter[i] = dict()
-        parent_uf = parents[i]
-        size_uf = sizes[i]
-        for j in range(0,n):
-            root = flattening_find(j,parent_uf)
-            cluster_costs[i][root] = np.float64(0)
-            n_c = sizes[i][root]
-            c_edge_counter[i][root] = np.int64((n_c * (n_c-1)) / 2)
-
-
-# 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
-    graph_file = open(filename, mode="r")
-
-    for line in graph_file:
-        # Kommentar-Zeilen überspringen
-        if line[0] == "#":
-            continue
-        splitted = line.split()
-        nodes = np.array(splitted[:-1], dtype=np.int64)
-        weight = np.float64(splitted[2])
+        cluster_costs = np.empty(x, dtype='O')
+        c_edge_counter = np.empty(x, dtype='O')
 
         for i in range(0,x):
-            root1 = find(nodes[0],parents[i])
-            root2 = find(nodes[1],parents[i])
-            # Kante zwischen zwei Clustern
-            if root1 != root2:
-                # mit positivem Gewicht (zu viel)
-                if weight > 0:
-                    cluster_costs[i][root1] += weight / 2
-                    cluster_costs[i][root2] += weight / 2
-                    solution_costs[i] += weight
-            # Kante innerhalb von Cluster
-            else:
-                # mit negativem Gewicht (fehlt)
-                if weight < 0:
-                    cluster_costs[i][root1] -= weight
-                    solution_costs[i] -= weight
-                c_edge_counter[i][root1] -= 1
+            cluster_costs[i] = dict()
+            c_edge_counter[i] = dict()
+            parent_uf = solutions_parents[i]
+            size_uf = inner_sizes[i]
+            for j in range(0,n):
+                root = flattening_find(j,parent_uf)
+                cluster_costs[i][root] = np.float64(0)
+                n_c = inner_sizes[i][root]
+                c_edge_counter[i][root] = np.int64((n_c * (n_c-1)) / 2)
+        print(c_edge_counter)
+        print(solutions_parents)
+        if merged:
+            print(inner_sizes)
+        # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
+        graph_file = open(filename, mode="r")
 
-    for i in range(0,x):
-        # über Cluster(-Repräsentanten, Keys) iterieren:
-        for c in c_edge_counter[i]:
-            missing_edges = c_edge_counter[i][c]
-            if missing_edges > 0:
-                # Kosten für komplett fehlende Kanten zur Lösung addieren
-                cluster_costs[i][c] += missing_edges * (-missing_weight)
-                solution_costs[i] += missing_edges * (-missing_weight)
+        for line in graph_file:
+            # Kommentar-Zeilen überspringen
+            if line[0] == "#":
+                continue
+            splitted = line.split()
+            nodes = np.array(splitted[:-1], dtype=np.int64)
+            weight = np.float64(splitted[2])
 
+            for i in range(0,x):
+                root1 = find(nodes[0],solutions_parents[i])
+                root2 = find(nodes[1],solutions_parents[i])
+                # Kante zwischen zwei Clustern
+                if root1 != root2:
+                    # mit positivem Gewicht (zu viel)
+                    if weight > 0:
+                        cluster_costs[i][root1] += weight / 2
+                        cluster_costs[i][root2] += weight / 2
+                        solution_costs[i] += weight
+                # Kante innerhalb von Cluster
+                else:
+                    # mit negativem Gewicht (fehlt)
+                    if weight < 0:
+                        cluster_costs[i][root1] -= weight
+                        solution_costs[i] -= weight
+                    c_edge_counter[i][root1] -= 1
+                    #print("missing edges for now: ", c_edge_counter[i][root1])
+
+        for i in range(0,x):
+            # über Cluster(-Repräsentanten, Keys) iterieren:
+            for root,edgecount in c_edge_counter[i].items():
+                missing_edges = edgecount
+                if missing_edges > 0:
+                    # Kosten für komplett fehlende Kanten zur Lösung addieren
+                    cluster_costs[i][root] += missing_edges * (-missing_weight)
+                    solution_costs[i] += missing_edges * (-missing_weight)
+        return (cluster_costs, solution_costs)
+    costs = calculate_costs(parents, x, False)
+    cluster_costs = costs[0]
+    solution_costs = costs[1]
 
 ### Solution Merge ###
 
@@ -151,9 +165,24 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
 # Platzhalter: Beste Lösung direkt übernehmen
     print("begin solution merge")
     #best_solution(solution_costs, parents, filename, missing_weight, n, x)
-    all_solutions(solution_costs, parents, filename, missing_weight, n, x)
+    #all_solutions(solution_costs, parents, filename, missing_weight, n, x)
 
-# Summe der Kosten von Lösungen mit "A und B sind in einer ZHK" (=(A,B) in Lösung) vs. summierte Kosten für "A und B sind in verschiedenen ZHK"-Lösungen. Wähle Kante dann zufällig mit Gewichtung durch die Kosten (bspw (A,B) e L* "kostet" 4930, (A,B) -e L* "kostet" nur 1320. Dann teile (0,1) in Annahmebereich (0, 4930 / (4930 + 1320)) und Ablehnungsbereich (4930 / (4930 + 1320), 1). Würfle gleichverteilte Zufallszahl aus (0,1) und je nach Ausprägung (kleiner/ größer als der Grenzwert) füge Kante hinzu oder nicht.
+    #Vorbereitung für Merge
+    #TODO c_opt bestimmen (dafür mehr Lösungen generieren!)
+    c_opt = cluster_model[np.argsort(solution_costs)[1]]
+    #todo Ende
+    best_i = np.where(cluster_model == c_opt)
+    f_solution_costs = solution_costs[best_i]
+    f_cluster_costs = cluster_costs[best_i]
+    f_parents = parents[best_i]
+    f_sizes = sizes[best_i]
+    #TODO 3 ersetzen durch ??? (#Merge-Lösungen)
+    merged_solutions = np.full((3,n), np.arange(n, dtype=np.int64))
+    merged_sizes = np.full((3,n), np.zeros(n, dtype=np.int64))
 
-# Cliquen einzeln bewerten und vergleichen:
-# Ähnlichkeitsvergleich zwischen "Positionen mit gleichen Einträgen" in "flachen" UF-Arrays?
+    for i in range(0,3):
+        merged = merged_solution(f_solution_costs, f_cluster_costs, f_parents, f_sizes, filename, missing_weight, n)
+        merged_solutions[i] = merged
+        merged_sizes[i] = calc_sizes(merged)
+    merged_costs = calculate_costs(merged_solutions, 3, True)[1]
+    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x)
