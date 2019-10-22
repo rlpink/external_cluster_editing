@@ -15,13 +15,12 @@ import csv
 # missing_weight: Gewicht für fehlende Kanten (die nicht in der Datei enthalten sind)
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
+# zu x kommen noch n_merges generierte Merge-Lösungen hinzu, sollte im Budget berücksichtigt werden
 
-def unionfind_cluster_editing(filename, missing_weight, n, budget):
+def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     graph_file = open(filename, mode="r")
-    x = np.int64(budget * 0.15)
-    #TODO Budget splitting, c_opt-Filter, neue Lösungen generieren
-    if x < 35:
-        print("Budget too low, try bigger budget (at least 235)")
+
+
 ### Preprocessing ###
     print("Begin preprocessing\n")
 # Knotengrade berechnen je Knoten (Scan über alle Kanten)
@@ -49,48 +48,59 @@ def unionfind_cluster_editing(filename, missing_weight, n, budget):
     #cluster_count = np.full(x, n, dtype=np.int64)
     # Alle Parameter für die Modelle festlegen:
     cluster_model = np.full(x,17)
-    k = int(x/35)
-    j = 0
-    c = 1
-
-    for i in range(0,x):
-        cluster_model[i] = c
-        j += 1
-        if j == k:
-            c += 1
+    def generate_solutions(first, c_opt):
+        if first:
+            k = int(x/35)
             j = 0
+            c = 1
 
-# 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
-    graph_file = open(filename, mode="r")
+            for i in range(0,x):
+                cluster_model[i] = c
+                j += 1
+                if j == k and c < 35:
+                    c += 1
+                    j = 0
+        if not first:
+            # Überschreibe Lösungen mit nicht-optimalem Parameter um danach neue zu generieren
+            for i in range(0,x):
+                if cluster_model[i] != c_opt:
+                    parents[i] = np.arange(n, dtype=np.int64)
+                    sizes[i] = np.ones(n, dtype = np.int64)
 
-    for line in graph_file:
-        # Kommentar-Zeilen überspringen
-        if line[0] == "#":
-            continue
-        splitted = line.split()
-        nodes = np.array(splitted[:-1], dtype=np.int64)
-        weight = np.float64(splitted[2])
+    # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
+        graph_file = open(filename, mode="r")
 
-        guess_n = (node_dgr[nodes[0]] + node_dgr[nodes[1]]) / 2
+        for line in graph_file:
+            # Kommentar-Zeilen überspringen
+            if line[0] == "#":
+                continue
+            splitted = line.split()
+            nodes = np.array(splitted[:-1], dtype=np.int64)
+            weight = np.float64(splitted[2])
 
-        decision_values = rand.rand(x)
-        for i in range(0, x):
-        # Samplingrate ermitteln
-            sampling_rate = model_flexible_v2(guess_n, cluster_model[i])
-            # Falls Kante gesamplet...
-            if decision_values[i] < sampling_rate:
-                # ...füge Kante ein in UF-Struktur
-                # Falls "echte" Vereinigung (zwei vorher verschiedene Cluster)...
-                #if union(nodes[0], nodes[1], parents[i], sizes[i]):
-                union(nodes[0], nodes[1], parents[i], sizes[i])
-                    #...reduziere Anzahl Cluster in der Lösung:
-                    #cluster_count[i] = cluster_count[i] - 1
+            guess_n = (node_dgr[nodes[0]] + node_dgr[nodes[1]]) / 2
+
+            decision_values = rand.rand(x)
+            for i in range(0, x):
+                if not first:
+                    if cluster_model[i] == c_opt:
+                        # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
+                        continue
+            # Samplingrate ermitteln
+                sampling_rate = model_flexible_v2(guess_n, cluster_model[i])
+                # Falls Kante gesamplet...
+                if decision_values[i] < sampling_rate:
+                    # ...füge Kante ein in UF-Struktur
+                    union(nodes[0], nodes[1], parents[i], sizes[i])
+
+    generate_solutions(True, 0)
+
 
 
 ### Solution Assessment ###
 # Nachbearbeitung aller Lösungen: Flache Struktur (= Knoten in selbem Cluster haben selben Eintrag im Array)
 # Und Berechnung benötigter Kanten je Cluster (n_c * (n_c-1) / 2) pro UF
-#FIXME Edgecounter does NOT WORK CORRECTLY yet. fix it pls. negative missing edges!!
+
     def calculate_costs(solutions_parents, x, merged):
         if merged:
             inner_sizes = merged_sizes
@@ -112,10 +122,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, budget):
                 cluster_costs[i][root] = np.float64(0)
                 n_c = inner_sizes[i][root]
                 c_edge_counter[i][root] = np.int64((n_c * (n_c-1)) / 2)
-        print(c_edge_counter)
-        print(solutions_parents)
-        if merged:
-            print(inner_sizes)
+
         # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
         graph_file = open(filename, mode="r")
 
@@ -167,22 +174,41 @@ def unionfind_cluster_editing(filename, missing_weight, n, budget):
     #best_solution(solution_costs, parents, filename, missing_weight, n, x)
     #all_solutions(solution_costs, parents, filename, missing_weight, n, x)
 
-    #Vorbereitung für Merge
-    #TODO c_opt bestimmen (dafür mehr Lösungen generieren!)
-    c_opt = cluster_model[np.argsort(solution_costs)[1]]
-    #todo Ende
-    best_i = np.where(cluster_model == c_opt)
-    f_solution_costs = solution_costs[best_i]
-    f_cluster_costs = cluster_costs[best_i]
-    f_parents = parents[best_i]
-    f_sizes = sizes[best_i]
-    #TODO 3 ersetzen durch ??? (#Merge-Lösungen)
-    merged_solutions = np.full((3,n), np.arange(n, dtype=np.int64))
-    merged_sizes = np.full((3,n), np.zeros(n, dtype=np.int64))
+    mean_costs_c = np.zeros(35, dtype=np.float64)
+    k = int(x/35)
+    rest = x % 35
+    # Summierte Kosten für selben Parameter
+    for i in range(x):
+        c = cluster_model[i] -1 # Umrechnung auf 0..34 (für Indizes)
+        mean_costs_c[c] = mean_costs_c[c] + solution_costs[i]
+    # Teilen durch Anzahl Lösungen mit dem Parameter (k oder k+rest für 35)
+    for i in range(35):
+        if i == 34:
+            mean_costs_c[i] = mean_costs_c[i] / (k + rest)
+        else:
+            mean_costs_c[i] = mean_costs_c[i] / k
+    # c_opt ist Parameter mit geringsten Durchschnittskosten der Lösungen
+    c_opt = np.argsort(mean_costs_c)[0] + 1 # Rückrechnung Index zu Parameter
 
-    for i in range(0,3):
-        merged = merged_solution(f_solution_costs, f_cluster_costs, f_parents, f_sizes, filename, missing_weight, n)
+    generate_solutions(False, c_opt)
+    costs = calculate_costs(parents, x, False)
+    cluster_costs = costs[0]
+    solution_costs = costs[1]
+
+    #Vorbereitung für Merge
+    # #TODO: soll ersetzt werden: Lösungen mit "falschem" Parameter werden überschrieben in zweitem Durchlauf
+    # best_i = np.where(cluster_model == c_opt)
+    # f_solution_costs = solution_costs[best_i]
+    # f_cluster_costs = cluster_costs[best_i]
+    # f_parents = parents[best_i]
+    # f_sizes = sizes[best_i]
+
+    merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
+    merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
+
+    for i in range(0,n_merges):
+        merged = merged_solution(solution_costs, cluster_costs, parents, sizes, filename, missing_weight, n)
         merged_solutions[i] = merged
         merged_sizes[i] = calc_sizes(merged)
-    merged_costs = calculate_costs(merged_solutions, 3, True)[1]
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x)
+    merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
+    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x, n_merges)

@@ -60,7 +60,13 @@ def weighted_decision(x, y, cluster_masks, f_cluster_costs, f_sizes, f_parents):
         if count_1 > 0:
             # Falls beide Zähler != 0 berechne "normales" Gewicht
             cost_1 = sum_for_1/count_1
-            result = cost_0/cost_1 -1
+            if cost_1 > 0:
+                result = cost_0/cost_1 -1
+            elif cost_0 == 0:
+                    result = 0
+            else:
+                result = (cost_0 + 0.1) / (cost_1 + 0.1) - 1
+
         else:
             # Falls kein Eintrag 1 gehört Knoten recht sicher nicht zum Cluster
             result = -1
@@ -104,9 +110,9 @@ def merged_solution(solution_costs, cluster_costs, parents, sizes, filename, mis
                 # denselben Wert hat wie an Stelle j
                 for k in range(0,n):
                     if parents[i][k] == parents[i][j]:
-                        cluster_masks[i][j] = 1
+                        cluster_masks[i][k] = 1
                     else:
-                        cluster_masks[i][j] = 0
+                        cluster_masks[i][k] = 0
             # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
             for k in range(0,n):
                 if k == j:
@@ -119,8 +125,6 @@ def merged_solution(solution_costs, cluster_costs, parents, sizes, filename, mis
                     if wd > merge_weight[k]:
                         # Ordne Knoten nach gewichteter Entscheidung diesem Cluster, j, zu
                         merged_sol[k] = j
-    print("Merge")
-    print(merged_sol)
     return merged_sol
 
 
@@ -134,11 +138,11 @@ def calc_sizes(solution):
     return sol_sizes
 
 
-def merged_to_file(solutions, costs, filename, missing_weight, n, x):
+def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     file = open("merged.txt", mode="a")
     with file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions merged): %d\nmerged solutions:\n" % (filename, missing_weight, n, x))
-        for j in range(3):
+        for j in range(n_merges):
             file.write(f"costs: {costs[j]}\n")
             for i in range(0,n):
                 file.write(f"{solutions[j][i]} ")
