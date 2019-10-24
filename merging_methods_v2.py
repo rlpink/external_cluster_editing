@@ -51,16 +51,12 @@ def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
     if count_0 > 0:
         cost_0 = sum_for_0/count_0
         if count_1 > 0:
-            # Falls beide Zähler != 0 berechne "normales" Gewicht
             cost_1 = sum_for_1/count_1
-            if cost_1 > 0:
-                result = cost_0/cost_1 -1
-            elif cost_0 == 0:
+            if cost_0 == 0 and cost_1 == 0:
                 print("Warning: Both together and single get cost 0 - no decision made")
                 result = 0
             else:
-                # Ersatzweise ein Trick, um das Verhältnis darzustellen
-                result = (cost_0 + 0.1) / (cost_1 + 0.1) - 1
+                result = (cost_0 - cost_1) / (cost_0 + cost_1)
 
         else:
             # Falls kein Eintrag 1 gehört Knoten recht sicher nicht zum Cluster
