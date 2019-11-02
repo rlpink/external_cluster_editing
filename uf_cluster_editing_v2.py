@@ -46,7 +46,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.ones((x,n), dtype=np.int64)
     # Modellparameter einlesen:
-    parameters = load_model_flexible_v2()
+    parameters_b = load_model_flexible_v2('params_below_100.csv')
+    parameters_a = load_model_flexible_v2('params_above_100.csv')
     #cluster_count = np.full(x, n, dtype=np.int64)
     # Alle Parameter für die Modelle festlegen:
     cluster_model = np.full(x,17)
@@ -89,7 +90,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
                         # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
                         continue
             # Samplingrate ermitteln
-                sampling_rate = model_flexible_v2(parameters, guess_n, cluster_model[i])
+                sampling_rate = model_flexible_v2(parameters_b, parameters_a, guess_n, cluster_model[i])
                 # Falls Kante gesamplet...
                 if decision_values[i] < sampling_rate:
                     # ...füge Kante ein in UF-Struktur

@@ -123,17 +123,39 @@ def sim_until_nearly_connected(n, p):
 
         union(v1, v2, uf_struct)
         edge_count = edge_count + 1
-        # if size of the parent of one of the nodes (now connected = same parent) is n,
-        # graph is connected
-        if uf_struct[1][find(v1, uf_struct)] >= np.int64(n*p):
+        # if size of the parent of one of the nodes (now connected = same parent) is big enough
+        # graph is connected to (at least) p-percent
+        if (uf_struct[1][find(v1, uf_struct)] /n) >= p:
             return edge_count
+
+def sim_until_nearly_connected_p(n, all_con_rates):
+    uf_struct = initialize_union_find(n)
+    edges = generate_edges(n)
+    edge_count = int(0)
+    c_i = 0
+    # iterate over edge index (via edges.shape[0] array)
+    for e in rand.permutation(edges.shape[0]):
+        v1 = edges[e][0]
+        v2 = edges[e][1]
+
+        union(v1, v2, uf_struct)
+        edge_count = edge_count + 1
+        # if size of the parent of one of the nodes (now connected = same parent) is big enough
+        # graph is connected to (at least) p-percent
+        parent_size = uf_struct[1][find(v1, uf_struct)]
+        while (parent_size/n) >= all_con_rates[c_i]:
+            # print edge_count for all fitting connectivity rates
+            print(edge_count, end=' ')
+            c_i += 1
+            # if parent_size/n is above maximum connectivity rate, end:
+            if c_i == len(all_con_rates):
+                print("")
+                return
 
 
 # for lido experiments:
 arg_n = int(sys.argv[1])
 rand.seed(1234)
-for perc in np.arange(0.05,0.9, 0.025):
-    for i in range(0,10000):
-        print(sim_until_nearly_connected(arg_n, perc), end= ' ')
-    print("")
+for i in range(0,10000):
+    sim_until_nearly_connected_p(arg_n, np.arange(0.05,0.95, 0.025))
 

@@ -17,7 +17,7 @@ yxz = filename[:-8]
 n = int(yxz.split('x')[0]) * int(yxz.split('x')[1])
 start_time = datetime.datetime.now()
 print(start_time)
-unionfind_cluster_editing(path, -1, n, 50, 15)
+unionfind_cluster_editing(path, -1, n, 300, 1)
 end_time = datetime.datetime.now()
 print(end_time)
 print(end_time - start_time)
