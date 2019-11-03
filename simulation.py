@@ -8,7 +8,9 @@ import numpy as np
 from numba import jit, njit
 from numpy import random as rand
 
-#uf = importlib.import_module('uf.union_find')
+"""
+This module holds the code for simulating data on graph connectivity. It can then be used to learn a model upon which can be used for choosing the sampling rate in unionfind cluster editing. It could also be used for further research.
+"""
 
 #######################################################
 def initialize_union_find(n):

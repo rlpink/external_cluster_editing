@@ -9,6 +9,12 @@ from numba import jit, njit
 from numpy import random as rand
 from itertools import chain
 
+"""
+This module is an old version of module data_sim2.
+It lacks some features of data_sim2, as it does not calculate the optimal costs.
+Recommended not to use.
+"""
+
 @njit
 def generate_edges(n, offset):
     max_edges = np.int64((n * (n-1)) / 2)
@@ -81,7 +87,9 @@ def simulate_graph(seed, cluster_sizes, del_factor, ins_factor):
     rand.seed(seed)
     cluster_boundaries = np.cumsum(cluster_sizes)
     with open("graph_sim.txt", mode="a") as file:
-        file.write("seed: %d\n" % seed)
+        file.write("#seed: %d\n" % seed)
+        file.write("#del_factor: %f\n" % del_factor)
+        file.write("#ins_factor: %f\n" % ins_factor)
         for c in range(0, len(cluster_sizes)-1):
             n_c = cluster_sizes[c+1]
             offset_c = cluster_boundaries[c]

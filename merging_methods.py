@@ -6,6 +6,11 @@ from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
 
+"""
+This module is deprecated. Use merging_methods2 instead.
+It is an earlier version with all bugs and flaws that are fixed in v2.
+"""
+
 def best_solution(solution_costs, parents, filename, missing_weight, n, x):
     costs = solution_costs.min()
     best = parents[solution_costs.argmin()]

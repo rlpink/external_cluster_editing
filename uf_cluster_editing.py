@@ -8,6 +8,10 @@ from model_sqrt import *
 from merging_methods import *
 import csv
 
+"""
+Deprecated module. Please use uf_cluster_editing_v2.py instead.
+"""
+
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
 # <Nummer Knoten 1> <Nummer Knoten 2> <Gewicht der Kante>
 # Die Knotenbezeichnungen sind (von 0 bis n-1) numpy.int64, die Gewichte numpy.float64
@@ -45,6 +49,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     print("begin solution generation")
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.ones((x,n), dtype=np.int64)
+    # Modellparameter einlesen:
+    parameters = load_model_flexible_v2()
     #cluster_count = np.full(x, n, dtype=np.int64)
     # Alle Parameter für die Modelle festlegen:
     cluster_model = np.full(x,17)
@@ -52,12 +58,12 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         if first:
             k = int(x/35)
             j = 0
-            c = 1
+            c = 0
 
             for i in range(0,x):
                 cluster_model[i] = c
                 j += 1
-                if j == k and c < 35:
+                if j == k and c < 34:
                     c += 1
                     j = 0
         if not first:
@@ -87,7 +93,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
                         # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
                         continue
             # Samplingrate ermitteln
-                sampling_rate = model_flexible_v2(guess_n, cluster_model[i])
+                sampling_rate = model_flexible_v2(parameters, guess_n, cluster_model[i])
                 # Falls Kante gesamplet...
                 if decision_values[i] < sampling_rate:
                     # ...füge Kante ein in UF-Struktur
@@ -179,7 +185,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     rest = x % 35
     # Summierte Kosten für selben Parameter
     for i in range(x):
-        c = cluster_model[i] -1 # Umrechnung auf 0..34 (für Indizes)
+        c = cluster_model[i]
         mean_costs_c[c] = mean_costs_c[c] + solution_costs[i]
     # Teilen durch Anzahl Lösungen mit dem Parameter (k oder k+rest für 35)
     for i in range(35):
@@ -196,13 +202,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     solution_costs = costs[1]
 
     #Vorbereitung für Merge
-    # #TODO: soll ersetzt werden: Lösungen mit "falschem" Parameter werden überschrieben in zweitem Durchlauf
-    # best_i = np.where(cluster_model == c_opt)
-    # f_solution_costs = solution_costs[best_i]
-    # f_cluster_costs = cluster_costs[best_i]
-    # f_parents = parents[best_i]
-    # f_sizes = sizes[best_i]
-
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
 

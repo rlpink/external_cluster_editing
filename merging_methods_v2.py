@@ -5,8 +5,15 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-
+"""
+This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
+It contains two methods for the (best) generated raw solutions,
+and, more importantly, methods to merge solutions into one better solution.
+"""
 def best_solution(solution_costs, parents, filename, missing_weight, n, x):
+    """
+    This function outputs the best generated solution to a file named "result.txt".
+    """
     costs = solution_costs.min()
     best = parents[solution_costs.argmin()]
     file = open("result.txt", mode="a")
@@ -17,6 +24,9 @@ def best_solution(solution_costs, parents, filename, missing_weight, n, x):
             file.write(f"{best[i]} ")
 
 def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
+    """
+    This function outputs all solutions, sorted by their costs, to a ifle named "all_solutions.txt".
+    """
     cost_sorted_i = np.argsort(solution_costs)
     print_to = filename[:-4] + "_all_solutions.txt"
     count = 1
@@ -31,6 +41,11 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
 
 
 def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
+    """
+    This function is a helper function for merging functions. It generates a weight for cluster center x and another node y by counting the costs over all solutions for two scenarios:
+    1: y is in the same cluster as x
+    0: y is in another cluster
+    """
     sol_len = len(f_parents)
     sum_for_0 = 0
     sum_for_1 = 0
@@ -73,6 +88,12 @@ def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
 
 # c_opt: bester Modell-Parameter (mit geringsten Kosten, zB. durch meiste in Top-10) zw. 0-34
 def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight, n):
+    """
+    First merge algorithm. It calculates cluster masks for each cluster center:
+    True, if the node is in the same component with cluster center,
+    False otherwise.
+    For these cluster masks, for each cluster center x and each other node y a weighted decision value is calculated. Is this weight better than the previous one, y gets assigned to new cluster center x. X then gets the weight of the maximum weight over all y, except if that is lower than its previous weight. Tree-like structures can emerge in such cases. Those trees are not handled yet, however they indicate a conflict in the solution, as a node that is both child and parent belongs to two distinct clusters.
+    """
     sol_len = len(solution_costs)
 
     # Neue Lösung als Array anlegen:
@@ -83,10 +104,6 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
     cluster_masks = np.zeros((sol_len,n), dtype=np.bool)
 
     for j in np.arange(0,n):
-        # Falls der Knoten schon einem Cluster zugeordnet wurde, wird er kein neues Zentrum
-        # if merged_sol[j] != j:
-        #     continue
-
         # Fülle Cluster-Masken
         for i in range(0,sol_len):
             # Jede Cluster-Maske enthält "True" überall, wo parents
@@ -97,7 +114,7 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
         # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
         # Initialisiere Wert für Cluster-Zentrum j:
         wd_j = 0
-        # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht)
+        # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
         for k in range(j+1,n):
             # Cluster-Zentrum wird übersprungen (dh. verweist möglicherweise noch auf anderes Cluster!)
             if k == j:
@@ -111,25 +128,20 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
                     merged_sol[k] = j
                     # Aktualisiere außerdem Gewicht
                     merge_weight[k] = wd
-            # Aktualisiere ggf. maximales Gewicht als Gewicht für Cluster-Zentrum
-            if wd > wd_j:
-                wd_j = wd
+                    # Aktualisiere ggf. maximales Gewicht als Gewicht für Cluster-Zentrum
+                    if wd > wd_j:
+                        wd_j = wd
+        # Falls das neue Gewicht größer (besser) ist als das bisherige, trenne das Cluster-Zentrum von seinem alten Cluster ab, indem es auf sich selbst zeigt.
         if wd_j > merge_weight[j]:
             merge_weight[j] = wd_j
+            merged_sol[j] = j
     return merged_sol
 
 
-def calc_sizes(solution):
-    n = len(solution)
-    sol_sizes = np.zeros(n, dtype=np.int64)
-    for i in range(0, n):
-        for j in range(0,n):
-            if solution[i] == solution[j]:
-                sol_sizes[i] += 1
-    return sol_sizes
-
-
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
+    """
+    A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
+    """
     print_to = filename[:-4] + "_merged.txt"
     cost_sorted_j = np.argsort(costs)
     with open(print_to, mode="a") as file:

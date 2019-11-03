@@ -5,6 +5,10 @@ from union_find import *
 import pytest
 from itertools import chain
 
+"""
+This module contains some basic tests for correctness of the union_find module.
+"""
+
 def test_find():
     n = 10000
     uf = initialize_union_find(n)

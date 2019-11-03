@@ -10,6 +10,11 @@ import csv
 from uf_cluster_editing_v2 import *
 import datetime
 
+"""
+This module is not a module. It serves only one purpose, to be executed by a lido3-shell file.
+It starts experiments for the unionfind_cluster_editing() algorithm.
+"""
+
 filename = sys.argv[1]
 path = sys.argv[2]
 rand.seed(1234)

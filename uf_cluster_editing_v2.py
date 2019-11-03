@@ -8,6 +8,10 @@ from model_sqrt import *
 from merging_methods_v2 import *
 import csv
 
+"""
+This module implements a cluster editing algorithm. It uses a semi-streaming approach and is therefore able to process files that would be too big for main memory.
+"""
+
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
 # <Nummer Knoten 1> <Nummer Knoten 2> <Gewicht der Kante>
 # Die Knotenbezeichnungen sind (von 0 bis n-1) numpy.int64, die Gewichte numpy.float64
@@ -15,9 +19,17 @@ import csv
 # missing_weight: Gewicht für fehlende Kanten (die nicht in der Datei enthalten sind)
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
-# zu x kommen noch n_merges generierte Merge-Lösungen hinzu, sollte im Budget berücksichtigt werden
 
 def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
+
+    """
+    This is a cluster editing algorithm, based on semi-streaming approach using union find to analyze graph structures.
+    The input file should contain edges in format
+    <np.int64: edge 1> <np.int64: edge 2> <np.float64: edge weight>\n
+    Parameter missing_weight sets a weight for edges that are not contained in the file (for unweighted data: -1)
+    Parameter n gives the number of objects (nodes)
+    Parameter x is the number of generated solutions (which are the basis for a merged solution). It merely influences running time, however with limited memory it should not be chosen too high. 300-1k is recommended, the more the better.
+    """
     graph_file = open(filename, mode="r")
 
 
