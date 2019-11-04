@@ -137,6 +137,42 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
             merged_sol[j] = j
     return merged_sol
 
+def calc_sizes(solution):
+    """
+    This function is used to construct a sizes-array for a merged solution which is then be used to calculate the costs.
+    """
+    n = len(solution)
+    sol_sizes = np.zeros(n, dtype=np.int64)
+    for i in range(0, n):
+        for j in range(0,n):
+            if solution[i] == solution[j]:
+                sol_sizes[i] += 1
+    return sol_sizes
+
+def merged_solution_best_center(solution_costs, vertex_costs, parents, sizes, missing_weight, n):
+    sol_len = len(solution_costs)
+
+    # Neue Lösung als Array anlegen:
+    merged_sol = np.arange(n, dtype=np.int64)
+    merge_weight = np.full(n, np.Inf, dtype=float)
+    # Bestimme pro Knoten den Index der Lösung mit geringsten Knotenkosten.
+    best_center_solutions = np.argmin(vertex_costs, axis=0)
+    assert len(best_center_solutions) != n,"Wrong axis used in argmin."
+    for i in range(0,n):
+        # Bestimme Eintrag (Repräsentant) der Lösung mit besten Knotenkosten:
+        solution = parents[best_center_solutions[i]]
+        this_vcosts = vertex_costs[best_center_solutions[i]]
+        for j in range(0,n):
+            # Prüfe, ob Knoten im betrachteten Cluster liegt
+            if solution[j] == solution[i]:
+                # Berechne Knotenkosten von j
+                j_costs = this_vcosts[j]
+                # Sind die Knotenkosten von j in dieser Lösung geringer, als in einer zuvor betrachteten Lösung bei der er ggf. einem anderen Cluster zugeordnet wurde, so ändere den Eintrag und aktualisiere sein "Gewicht".
+                if j_costs < merge_weight[j]:
+                    merged_sol[j] = i
+                    merge_weight[j] = j_costs
+
+
 
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """

@@ -220,16 +220,13 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
-
-    # merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
-    # merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
-
-   ##   for i in range(0,n_merges):
-    #     merged = merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight, n)
-    #     print("generated merge: ", i)
-    #     merged_solutions[i] = merged
-    #     merged_sizes[i] = calc_sizes(merged)
-    merged = merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight, n)
+    # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
+    merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
+    merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
+    for i in range(0,n_merges):
+        merged = merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight, n)
+        merged_solutions[i] = merged
+        merged_sizes[i] = calc_sizes(merged)
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x, n_merges)
     all_solutions(solution_costs, parents, filename, missing_weight, n, x)
