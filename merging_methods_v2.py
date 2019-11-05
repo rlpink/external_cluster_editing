@@ -39,7 +39,7 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
                 file.write(f"{parents[i][j]} ")
             file.write("\n")
 
-
+@njit
 def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
     """
     This function is a helper function for merging functions. It generates a weight for cluster center x and another node y by counting the costs over all solutions for two scenarios:
@@ -103,7 +103,7 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
     # Arrays anlegen für Vergleichbarkeit der Cluster:
     cluster_masks = np.zeros((sol_len,n), dtype=np.bool)
 
-    for j in np.arange(0,n):
+    for j in range(0,n):
         # Fülle Cluster-Masken
         for i in range(0,sol_len):
             # Jede Cluster-Maske enthält "True" überall, wo parents
@@ -137,6 +137,7 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
             merged_sol[j] = j
     return merged_sol
 
+@njit
 def calc_sizes(solution):
     """
     This function is used to construct a sizes-array for a merged solution which is then be used to calculate the costs.

@@ -220,12 +220,21 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
+    # Optimierung: Filtern der "besten" Lösungen, um eine solidere Basis für den Merge zu schaffen.
+    best_costs_i = np.argmin(solution_costs)
+    best_costs = solution_costs[best_costs_i]
+    good_costs_i = np.where(solution_costs <= best_costs * 1.5)
+
     # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
     for i in range(0,n_merges):
-        merged = merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight, n)
+        merged = merged_solution(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n)
         merged_solutions[i] = merged
+        # Glätten der Lösung falls Baumstruktur auftritt (joinen der zwei Cluster, hmm)
+        for j in range(0,n):
+            flattening_find(j, merged_solutions[i])
+        # Erst nach dem Glätten Kosten berechnen
         merged_sizes[i] = calc_sizes(merged)
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x, n_merges)
