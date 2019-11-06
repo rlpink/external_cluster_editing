@@ -23,7 +23,7 @@ def best_solution(solution_costs, parents, filename, missing_weight, n, x):
         for i in range(0,n):
             file.write(f"{best[i]} ")
 
-def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
+def all_solutions(solution_costs, parents, filename, missing_weight, n):
     """
     This function outputs all solutions, sorted by their costs, to a ifle named "all_solutions.txt".
     """
@@ -43,8 +43,10 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n, x):
 def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
     """
     This function is a helper function for merging functions. It generates a weight for cluster center x and another node y by counting the costs over all solutions for two scenarios:
-    positive: y is in the same cluster as x
-    negative: y is in another cluster
+    1: y is in the same cluster as x
+    0: y is in another cluster
+    The return value is between -1 and 1, -1 for certainly not connected, 1 for certainly connected. A value of 0 would indicate that connected or not connected would (in mean) yield the same costs which is considerably unlikely, as both errors come with about n_c edges to be either deleted or inserted.
+    The weighted decision therefore tries to distinguish between "normal error" which depends on chosen samplingrate and the problem specific error, and "normal error + specific error for x and y". A wrong decision should only be possible if the normal error's variance is too high and there are very little solutions on one of both sides to calculate the mean upon.
     """
     sol_len = len(f_parents)
     sum_for_0 = 0
@@ -60,31 +62,27 @@ def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
         else:
             sum_for_1 += x_cost + y_cost
             count_1 += 1
-    # Solange nichts bekannt: Gewicht für Clusterzugehörigkeit 0 (gehört weder dazu noch nicht dazu, maximal Unsicherheit)
-    result = 0
+
     if count_0 > 0:
         cost_0 = sum_for_0/count_0
         if count_1 > 0:
             cost_1 = sum_for_1/count_1
             if cost_0 == 0 and cost_1 == 0:
-                print("Warning: Both together and single get cost 0 - no decision made")
-                result = 0
+                print("Warning: Both together and single get cost 0 - something went wrong!")
             else:
-                result = (cost_0 - cost_1) / (cost_0 + cost_1)
+                return (cost_0 - cost_1) / (cost_0 + cost_1)
 
         else:
             # Falls kein Eintrag 1 gehört Knoten recht sicher nicht zum Cluster
-            result = -1.0
+            return -1.0
     else:
         # Falls kein Eintrag 0 gehört Knoten recht sicher zum Cluster
-        result = 1
-
-    # Alle Fallunterscheidungen fangen sehr unwahrscheinliche Fälle ab; für genügend viele Lösungen sollte mit passender Samplingrate(!) keiner dieser Fälle eintreten!
+        return 1.0
 
     # Falls Rückgabe positiv: Entscheidung für 1 (zusammen), falls negativ: Entscheidung für 0 (getrennt).
     # Je näher Rückgabewert an 0, desto unsicherer die Entscheidung.
-    return result
-
+    # Falls kein voriger Fall eintritt (Häufigkeit entscheidet/ Verhältnis liegt vor):
+    return 0
 
 
 @njit
@@ -98,11 +96,11 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
     sol_len = len(solution_costs)
 
     # Neue Lösung als Array anlegen:
-    merged_sol = np.arange(n, dtype=np.int64)
-    merge_weight = np.zeros(n, dtype=float)
+    merged_sol = np.arange(n) #dtype = np.int64 not supported by numba
+    merged_sizes = np.ones(n, dtype=np.int64)
 
     # Arrays anlegen für Vergleichbarkeit der Cluster:
-    cluster_masks = np.zeros((sol_len,n), dtype=np.bool)
+    cluster_masks = np.zeros((sol_len,n), dtype=np.int8) #np.bool not supported
 
     for j in range(0,n):
         # Fülle Cluster-Masken
@@ -110,71 +108,23 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
             # Jede Cluster-Maske enthält "True" überall, wo parents
             # denselben Wert hat wie an Stelle j, sonst "False"
             for k in range(0,n):
-                cluster_masks[i][k] = (parents[i][k] == parents[i][j])
+                cluster_masks[i][k] = np.int8(parents[i][k] == parents[i][j])
 
         # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
-        # Initialisiere Wert für Cluster-Zentrum j:
-        wd_j = 0
         # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
         for k in range(j+1,n):
             # Cluster-Zentrum wird übersprungen (dh. verweist möglicherweise noch auf anderes Cluster!)
             if k == j:
                 continue
             wd = weighted_decision(j, k, cluster_masks, vertex_costs, sizes, parents)
-            # Falls neues Gewicht aussagekräftiger als voriges:
-            if wd > merge_weight[k]:
-                # Prüfe, ob die Knoten nicht bereits in einem Cluster liegen:
-                if merged_sol[k] != merged_sol[j]:
-                    # Ordne Knoten nach gewichteter Entscheidung diesem Zentrum zu
-                    merged_sol[k] = j
-                    # Aktualisiere außerdem Gewicht
-                    merge_weight[k] = wd
-                    # Aktualisiere ggf. maximales Gewicht als Gewicht für Cluster-Zentrum
-                    if wd > wd_j:
-                        wd_j = wd
-        # Falls das neue Gewicht größer (besser) ist als das bisherige, trenne das Cluster-Zentrum von seinem alten Cluster ab, indem es auf sich selbst zeigt.
-        if wd_j > merge_weight[j]:
-            merge_weight[j] = wd_j
-            merged_sol[j] = j
-    return merged_sol
+            # Falls Gewicht positiv:
+            if wd > 0:
+                union(j, k, merged_sol, merged_sizes)
+    result = np.zeros((2,n))
+    result[0] = merged_sol
+    result[1] = merged_sizes
 
-@njit
-def calc_sizes(solution):
-    """
-    This function is used to construct a sizes-array for a merged solution which is then be used to calculate the costs.
-    """
-    n = len(solution)
-    sol_sizes = np.zeros(n, dtype=np.int64)
-    for i in range(0, n):
-        for j in range(0,n):
-            if solution[i] == solution[j]:
-                sol_sizes[i] += 1
-    return sol_sizes
-
-def merged_solution_best_center(solution_costs, vertex_costs, parents, sizes, missing_weight, n):
-    sol_len = len(solution_costs)
-
-    # Neue Lösung als Array anlegen:
-    merged_sol = np.arange(n, dtype=np.int64)
-    merge_weight = np.full(n, np.Inf, dtype=float)
-    # Bestimme pro Knoten den Index der Lösung mit geringsten Knotenkosten.
-    best_center_solutions = np.argmin(vertex_costs, axis=0)
-    assert len(best_center_solutions) != n,"Wrong axis used in argmin."
-    for i in range(0,n):
-        # Bestimme Eintrag (Repräsentant) der Lösung mit besten Knotenkosten:
-        solution = parents[best_center_solutions[i]]
-        this_vcosts = vertex_costs[best_center_solutions[i]]
-        for j in range(0,n):
-            # Prüfe, ob Knoten im betrachteten Cluster liegt
-            if solution[j] == solution[i]:
-                # Berechne Knotenkosten von j
-                j_costs = this_vcosts[j]
-                # Sind die Knotenkosten von j in dieser Lösung geringer, als in einer zuvor betrachteten Lösung bei der er ggf. einem anderen Cluster zugeordnet wurde, so ändere den Eintrag und aktualisiere sein "Gewicht".
-                if j_costs < merge_weight[j]:
-                    merged_sol[j] = i
-                    merge_weight[j] = j_costs
-
-
+    return result
 
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """

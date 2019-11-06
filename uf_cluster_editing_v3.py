@@ -5,11 +5,11 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-from merging_methods import *
+from merging_methods_v3 import *
 import csv
 
 """
-Deprecated module. Please use uf_cluster_editing_v2.py instead.
+This module implements a cluster editing algorithm. It uses a semi-streaming approach and is therefore able to process files that would be too big for main memory.
 """
 
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
@@ -19,9 +19,17 @@ Deprecated module. Please use uf_cluster_editing_v2.py instead.
 # missing_weight: Gewicht für fehlende Kanten (die nicht in der Datei enthalten sind)
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
-# zu x kommen noch n_merges generierte Merge-Lösungen hinzu, sollte im Budget berücksichtigt werden
 
 def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
+
+    """
+    This is a cluster editing algorithm, based on semi-streaming approach using union find to analyze graph structures.
+    The input file should contain edges in format
+    <np.int64: edge 1> <np.int64: edge 2> <np.float64: edge weight>\n
+    Parameter missing_weight sets a weight for edges that are not contained in the file (for unweighted data: -1)
+    Parameter n gives the number of objects (nodes)
+    Parameter x is the number of generated solutions (which are the basis for a merged solution). It merely influences running time, however with limited memory it should not be chosen too high. 300-1k is recommended, the more the better.
+    """
     graph_file = open(filename, mode="r")
 
 
@@ -50,7 +58,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.ones((x,n), dtype=np.int64)
     # Modellparameter einlesen:
-    parameters = load_model_flexible_v2()
+    parameters_b = load_model_flexible_v2('params_below_100.csv')
+    parameters_a = load_model_flexible_v2('params_above_100.csv')
     #cluster_count = np.full(x, n, dtype=np.int64)
     # Alle Parameter für die Modelle festlegen:
     cluster_model = np.full(x,17)
@@ -93,7 +102,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
                         # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
                         continue
             # Samplingrate ermitteln
-                sampling_rate = model_flexible_v2(parameters, guess_n, cluster_model[i])
+                sampling_rate = model_flexible_v2(parameters_b, parameters_a, guess_n, cluster_model[i])
                 # Falls Kante gesamplet...
                 if decision_values[i] < sampling_rate:
                     # ...füge Kante ein in UF-Struktur
@@ -115,19 +124,19 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         print("begin solution assessment")
         solution_costs = np.zeros(x, dtype=np.float64)
 
-        cluster_costs = np.empty(x, dtype='O')
-        c_edge_counter = np.empty(x, dtype='O')
+        vertex_costs = np.zeros((x,n), dtype=np.float64)
+        c_edge_counter = np.zeros((x,n), dtype=np.int64)
 
         for i in range(0,x):
-            cluster_costs[i] = dict()
-            c_edge_counter[i] = dict()
+            if merged and cluster_model[i] == c_opt:
+                # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
+                continue
             parent_uf = solutions_parents[i]
             size_uf = inner_sizes[i]
             for j in range(0,n):
                 root = flattening_find(j,parent_uf)
-                cluster_costs[i][root] = np.float64(0)
                 n_c = inner_sizes[i][root]
-                c_edge_counter[i][root] = np.int64((n_c * (n_c-1)) / 2)
+                c_edge_counter[i][j] = n_c - 1
 
         # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
         graph_file = open(filename, mode="r")
@@ -141,36 +150,47 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             weight = np.float64(splitted[2])
 
             for i in range(0,x):
-                root1 = find(nodes[0],solutions_parents[i])
-                root2 = find(nodes[1],solutions_parents[i])
+                if merged and cluster_model[i] == c_opt:
+                    # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
+                    continue
+                if not merged:
+                    root1 = find(nodes[0],solutions_parents[i])
+                    root2 = find(nodes[1],solutions_parents[i])
+                else:
+                    root1 = solutions_parents[i][nodes[0]]
+                    root2 = solutions_parents[i][nodes[1]]
                 # Kante zwischen zwei Clustern
                 if root1 != root2:
                     # mit positivem Gewicht (zu viel)
                     if weight > 0:
-                        cluster_costs[i][root1] += weight / 2
-                        cluster_costs[i][root2] += weight / 2
+                        vertex_costs[i][nodes[0]] += weight / 2
+                        vertex_costs[i][nodes[1]] += weight / 2
                         solution_costs[i] += weight
                 # Kante innerhalb von Cluster
                 else:
                     # mit negativem Gewicht (fehlt)
                     if weight < 0:
-                        cluster_costs[i][root1] -= weight
+                        vertex_costs[i][nodes[0]] -= weight / 2
+                        vertex_costs[i][nodes[1]] -= weight / 2
                         solution_costs[i] -= weight
-                    c_edge_counter[i][root1] -= 1
+                    c_edge_counter[i][nodes[0]] -= 1
+                    c_edge_counter[i][nodes[1]] -= 1
                     #print("missing edges for now: ", c_edge_counter[i][root1])
 
         for i in range(0,x):
             # über Cluster(-Repräsentanten, Keys) iterieren:
-            for root,edgecount in c_edge_counter[i].items():
-                missing_edges = edgecount
+            for j in range(n):
+                missing_edges = c_edge_counter[i][j]
                 if missing_edges > 0:
                     # Kosten für komplett fehlende Kanten zur Lösung addieren
-                    cluster_costs[i][root] += missing_edges * (-missing_weight)
-                    solution_costs[i] += missing_edges * (-missing_weight)
-        return (cluster_costs, solution_costs)
+                    vertex_costs[i][j] += missing_edges * (-missing_weight) * 0.5
+                    solution_costs[i] += missing_edges * (-missing_weight) * 0.5 # Zwei Knoten innerhalb eines Clusters vermissen die selbe Kante, daher *0.5 bei Berechnung über die Knoten
+        return (vertex_costs, solution_costs)
     costs = calculate_costs(parents, x, False)
-    cluster_costs = costs[0]
+    vertex_costs = costs[0]
     solution_costs = costs[1]
+
+    all_solutions(solution_costs, parents, filename, missing_weight, n, x)
 
 ### Solution Merge ###
 
@@ -198,16 +218,25 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
 
     generate_solutions(False, c_opt)
     costs = calculate_costs(parents, x, False)
-    cluster_costs = costs[0]
+    vertex_costs = costs[0]
     solution_costs = costs[1]
+    # Optimierung: Filtern der "besten" Lösungen, um eine solidere Basis für den Merge zu schaffen.
+    best_costs_i = np.argmin(solution_costs)
+    best_costs = solution_costs[best_costs_i]
+    good_costs_i = np.where(solution_costs <= best_costs * 2)
 
-    #Vorbereitung für Merge
+    # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
-
     for i in range(0,n_merges):
-        merged = merged_solution(solution_costs, cluster_costs, parents, sizes, filename, missing_weight, n)
-        merged_solutions[i] = merged
-        merged_sizes[i] = calc_sizes(merged)
+        merged = merged_solution(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n)
+        merged_solutions[i] = merged[0]
+        merged_sizes[i] = merged[1]
+        # Glätten der Lösung falls Baumstruktur auftritt
+        for j in range(0,n):
+            flattening_find(j, merged_solutions[i])
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x, n_merges)
+    # Da Merge nur noch x2 Lösungen verwendet, nur diese angeben:
+    x2 = len(good_costs_i[0])
+    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
