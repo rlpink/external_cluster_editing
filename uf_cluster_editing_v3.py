@@ -65,14 +65,14 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     cluster_model = np.full(x,17)
     def generate_solutions(first, c_opt):
         if first:
-            k = int(x/35)
+            k = int(x/37)
             j = 0
             c = 0
 
             for i in range(0,x):
                 cluster_model[i] = c
                 j += 1
-                if j == k and c < 34:
+                if j == k and c < 36:
                     c += 1
                     j = 0
         if not first:
@@ -135,8 +135,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             size_uf = inner_sizes[i]
             for j in range(0,n):
                 root = flattening_find(j,parent_uf)
-                n_c = inner_sizes[i][root]
-                c_edge_counter[i][j] = n_c - 1
+                n_c = inner_sizes[i, root]
+                c_edge_counter[i, j] = n_c - 1
 
         # 3. Scan über alle Kanten: Kostenberechnung für alle Lösungen (Gesamtkosten und Clusterkosten)
         graph_file = open(filename, mode="r")
@@ -157,74 +157,69 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
                     root1 = find(nodes[0],solutions_parents[i])
                     root2 = find(nodes[1],solutions_parents[i])
                 else:
-                    root1 = solutions_parents[i][nodes[0]]
-                    root2 = solutions_parents[i][nodes[1]]
+                    root1 = solutions_parents[i, nodes[0]]
+                    root2 = solutions_parents[i, nodes[1]]
                 # Kante zwischen zwei Clustern
                 if root1 != root2:
                     # mit positivem Gewicht (zu viel)
                     if weight > 0:
-                        vertex_costs[i][nodes[0]] += weight / 2
-                        vertex_costs[i][nodes[1]] += weight / 2
+                        vertex_costs[i, nodes[0]] += weight / 2
+                        vertex_costs[i, nodes[1]] += weight / 2
                         solution_costs[i] += weight
                 # Kante innerhalb von Cluster
                 else:
                     # mit negativem Gewicht (fehlt)
                     if weight < 0:
-                        vertex_costs[i][nodes[0]] -= weight / 2
-                        vertex_costs[i][nodes[1]] -= weight / 2
+                        vertex_costs[i, nodes[0]] -= weight / 2
+                        vertex_costs[i, nodes[1]] -= weight / 2
                         solution_costs[i] -= weight
-                    c_edge_counter[i][nodes[0]] -= 1
-                    c_edge_counter[i][nodes[1]] -= 1
+                    c_edge_counter[i, nodes[0]] -= 1
+                    c_edge_counter[i, nodes[1]] -= 1
                     #print("missing edges for now: ", c_edge_counter[i][root1])
 
         for i in range(0,x):
             # über Cluster(-Repräsentanten, Keys) iterieren:
             for j in range(n):
-                missing_edges = c_edge_counter[i][j]
+                missing_edges = c_edge_counter[i, j]
                 if missing_edges > 0:
                     # Kosten für komplett fehlende Kanten zur Lösung addieren
-                    vertex_costs[i][j] += missing_edges * (-missing_weight) * 0.5
+                    vertex_costs[i, j] += missing_edges * (-missing_weight) * 0.5
                     solution_costs[i] += missing_edges * (-missing_weight) * 0.5 # Zwei Knoten innerhalb eines Clusters vermissen die selbe Kante, daher *0.5 bei Berechnung über die Knoten
         return (vertex_costs, solution_costs)
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
 
-    all_solutions(solution_costs, parents, filename, missing_weight, n, x)
-
 ### Solution Merge ###
 
 # Mithilfe der Bewertungen/Kosten Lösungen sinnvoll mergen/reparieren
 # Platzhalter: Beste Lösung direkt übernehmen
     print("begin solution merge")
-    #best_solution(solution_costs, parents, filename, missing_weight, n, x)
-    #all_solutions(solution_costs, parents, filename, missing_weight, n, x)
 
-    mean_costs_c = np.zeros(35, dtype=np.float64)
-    k = int(x/35)
-    rest = x % 35
+    mean_costs_c = np.zeros(37, dtype=np.float64)
+    c_count = np.zeros(37, dtype= np.int64)
     # Summierte Kosten für selben Parameter
     for i in range(x):
         c = cluster_model[i]
         mean_costs_c[c] = mean_costs_c[c] + solution_costs[i]
-    # Teilen durch Anzahl Lösungen mit dem Parameter (k oder k+rest für 35)
-    for i in range(35):
-        if i == 34:
-            mean_costs_c[i] = mean_costs_c[i] / (k + rest)
-        else:
-            mean_costs_c[i] = mean_costs_c[i] / k
+        c_count[c] += 1
+    # Teilen durch Anzahl Lösungen mit dem Parameter
+    for i in range(37):
+        mean_costs_c[i] = mean_costs_c[i]/c_count[i]
     # c_opt ist Parameter mit geringsten Durchschnittskosten der Lösungen
-    c_opt = np.argsort(mean_costs_c)[0] + 1 # Rückrechnung Index zu Parameter
+    c_opt = np.argsort(mean_costs_c)[0]
 
     generate_solutions(False, c_opt)
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
     # Optimierung: Filtern der "besten" Lösungen, um eine solidere Basis für den Merge zu schaffen.
-    best_costs_i = np.argmin(solution_costs)
-    best_costs = solution_costs[best_costs_i]
-    good_costs_i = np.where(solution_costs <= best_costs * 2)
-
+    # best_costs_i = np.argmin(solution_costs)
+    # best_costs = solution_costs[best_costs_i]
+    # good_costs_i = np.where(solution_costs <= best_costs * 1.7)
+    # Variante 2: Beste 10% verwenden
+    top_percent = range(np.int64(x*0.1))
+    good_costs_i = np.argsort(solution_costs)[top_percent]
     # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
@@ -237,6 +232,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             flattening_find(j, merged_solutions[i])
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     # Da Merge nur noch x2 Lösungen verwendet, nur diese angeben:
-    x2 = len(good_costs_i[0])
+    x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
     all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
+    print_solution_costs(solution_costs, filename)

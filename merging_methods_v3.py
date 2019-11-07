@@ -23,6 +23,17 @@ def best_solution(solution_costs, parents, filename, missing_weight, n, x):
         for i in range(0,n):
             file.write(f"{best[i]} ")
 
+def print_solution_costs(solution_costs, filename):
+    """
+    This function outputs all sorted solution costs to a ifle named "..._solution_costs.txt".
+    """
+    sorted_costs = np.sort(solution_costs)
+    print_to = filename[:-4] + "_solution_costs.txt"
+    with open(print_to, mode="a") as file:
+        for cost in sorted_costs:
+            file.write(str(cost))
+            file.write("\n")
+
 def all_solutions(solution_costs, parents, filename, missing_weight, n):
     """
     This function outputs all solutions, sorted by their costs, to a ifle named "all_solutions.txt".
@@ -45,8 +56,7 @@ def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
     This function is a helper function for merging functions. It generates a weight for cluster center x and another node y by counting the costs over all solutions for two scenarios:
     1: y is in the same cluster as x
     0: y is in another cluster
-    The return value is between -1 and 1, -1 for certainly not connected, 1 for certainly connected. A value of 0 would indicate that connected or not connected would (in mean) yield the same costs which is considerably unlikely, as both errors come with about n_c edges to be either deleted or inserted.
-    The weighted decision therefore tries to distinguish between "normal error" which depends on chosen samplingrate and the problem specific error, and "normal error + specific error for x and y". A wrong decision should only be possible if the normal error's variance is too high and there are very little solutions on one of both sides to calculate the mean upon.
+    The return value is between -1 and 1, -1 for certainly not connected, 1 for certainly connected. A value of 0 would indicate that connected or not connected would (in mean) yield the same costs (as in: the error is not big enough to make a difference).
     """
     sol_len = len(f_parents)
     sum_for_0 = 0
@@ -117,8 +127,8 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
             if k == j:
                 continue
             wd = weighted_decision(j, k, cluster_masks, vertex_costs, sizes, parents)
-            # Falls Gewicht positiv:
-            if wd > 0:
+            # Falls Gewicht groß genug:
+            if wd > 0.05:
                 union(j, k, merged_sol, merged_sizes)
     result = np.zeros((2,n))
     result[0] = merged_sol
