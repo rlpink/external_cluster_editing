@@ -92,7 +92,7 @@ def weighted_decision(x, y, cluster_masks, f_vertex_costs, f_sizes, f_parents):
     # Falls Rückgabe positiv: Entscheidung für 1 (zusammen), falls negativ: Entscheidung für 0 (getrennt).
     # Je näher Rückgabewert an 0, desto unsicherer die Entscheidung.
     # Falls kein voriger Fall eintritt (Häufigkeit entscheidet/ Verhältnis liegt vor):
-    return 0
+    return 0.0
 
 
 @njit
@@ -135,6 +135,43 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
     result[1] = merged_sizes
 
     return result
+
+def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+    sol_len = len(solution_costs)
+    for i in range(n):
+        # Arrays anlegen für Vergleichbarkeit der Cluster:
+        cluster_masks = np.zeros((sol_len,n), dtype=np.int8) #np.bool not supported
+
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        if merged[i] == i and merged_sizes[i] < 0.5*node_dgree[i]:
+            max_wd = -1
+            best_fit = i
+            for j in range(n):
+                # Überspringe bereits verbundene Knoten und sich selbst
+                if i == j or merged[i] == merged[j]:
+                    continue
+                # Fülle Cluster-Masken
+                for x in range(0,sol_len):
+                    # Jede Cluster-Maske enthält "True" überall, wo parents
+                    # denselben Wert hat wie an Stelle j, sonst "False"
+                    cluster_masks[x, j] = np.int8(parents[x, i] == parents[x, j])
+                # Berechne Gewicht:
+                wd = weighted_decision(i, j, cluster_masks, vertex_costs, sizes, parents)
+                # Aktualisiere ggf. best-passenden Knoten
+                if wd > max_wd:
+                    max_wd = wd
+                    best_fit = j
+            # ggf. Modifikation, nur union falls auch max_wd passt.
+            #if max_wd > 0:
+            union(i, best_fit, merged, merged_sizes)
+    result = np.zeros((2,n), dtype=np.int64)
+    result[0] = merged
+    result[1] = merged_sizes
+
+    return result
+
+
 
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """

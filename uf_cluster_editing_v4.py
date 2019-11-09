@@ -5,7 +5,7 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-from merging_methods_v3 import *
+from merging_methods_v4 import *
 import csv
 
 """
@@ -123,14 +123,10 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             inner_sizes = sizes
         print("begin solution assessment")
         solution_costs = np.zeros(x, dtype=np.float64)
-
         vertex_costs = np.zeros((x,n), dtype=np.float64)
         c_edge_counter = np.zeros((x,n), dtype=np.int64)
 
         for i in range(0,x):
-            if merged and cluster_model[i] == c_opt:
-                # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
-                continue
             parent_uf = solutions_parents[i]
             size_uf = inner_sizes[i]
             for j in range(0,n):
@@ -150,9 +146,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             weight = np.float64(splitted[2])
 
             for i in range(0,x):
-                if merged and cluster_model[i] == c_opt:
-                    # Ändere in 2. Lauf nichts an den Lösungen, die bereits gut sind!
-                    continue
                 if not merged:
                     root1 = find(nodes[0],solutions_parents[i])
                     root2 = find(nodes[1],solutions_parents[i])
@@ -230,9 +223,14 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         # Glätten der Lösung falls Baumstruktur auftritt
         for j in range(0,n):
             flattening_find(j, merged_solutions[i])
+        rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
+        merged_solutions[i] = rep[0]
+        merged_sizes[i] = rep[1]
+        # Sicherheitshalber noch mal glätten für Lösungsberechnung:
+        for j in range(0,n):
+            flattening_find(j, merged_solutions[i])
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     # Da Merge nur noch x2 Lösungen verwendet, nur diese angeben:
     x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
     all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
-    print_solution_costs(solution_costs, filename)
