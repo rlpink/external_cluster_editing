@@ -5,6 +5,7 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
+from numba.typed import Dict
 """
 This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
 It contains two methods for the (best) generated raw solutions,
@@ -136,26 +137,29 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
 
     return result
 
+@njit
 def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
     sol_len = len(solution_costs)
-    for i in range(n):
-        # Arrays anlegen für Vergleichbarkeit der Cluster:
-        cluster_masks = np.zeros((sol_len,n), dtype=np.int8) #np.bool not supported
+    # Arrays anlegen für Vergleichbarkeit der Cluster:
+    cluster_masks = np.zeros((sol_len,n), dtype=np.int8) #np.bool not supported
 
+    for i in range(n):
         # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
         # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
         if merged[i] == i and merged_sizes[i] < 0.5*node_dgree[i]:
             max_wd = -1
             best_fit = i
+            # Fülle Cluster-Masken
+            for x in range(0,sol_len):
+                for j in range(n):
+                    # Jede Cluster-Maske enthält "True" überall, wo parents
+                    # denselben Wert hat wie an Stelle j, sonst "False"
+                    cluster_masks[x, j] = np.int8(parents[x, i] == parents[x, j])
+
             for j in range(n):
                 # Überspringe bereits verbundene Knoten und sich selbst
                 if i == j or merged[i] == merged[j]:
                     continue
-                # Fülle Cluster-Masken
-                for x in range(0,sol_len):
-                    # Jede Cluster-Maske enthält "True" überall, wo parents
-                    # denselben Wert hat wie an Stelle j, sonst "False"
-                    cluster_masks[x, j] = np.int8(parents[x, i] == parents[x, j])
                 # Berechne Gewicht:
                 wd = weighted_decision(i, j, cluster_masks, vertex_costs, sizes, parents)
                 # Aktualisiere ggf. best-passenden Knoten
@@ -163,7 +167,7 @@ def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, s
                     max_wd = wd
                     best_fit = j
             # ggf. Modifikation, nur union falls auch max_wd passt.
-            #if max_wd > 0:
+            #if max_wd > 0.1:
             union(i, best_fit, merged, merged_sizes)
     result = np.zeros((2,n), dtype=np.int64)
     result[0] = merged
@@ -172,6 +176,169 @@ def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, s
     return result
 
 
+def get_cluster_centers_big(merged, merged_sizes, node_dgree, split):
+    big_ccs = {}
+    for i in range(len(merged)):
+        if merged_sizes[merged[i]] >= node_dgree[merged[i]] * split:
+            big_ccs[merged[i]] = merged_sizes[merged[i]]
+    return big_ccs
+
+
+def get_cluster_centers_small(merged, merged_sizes, node_dgree, split):
+    small_ccs = {}
+    for i in range(len(merged)):
+        if merged_sizes[merged[i]] < node_dgree[merged[i]] * split:
+            small_ccs[merged[i]] = merged_sizes[merged[i]]
+    return small_ccs
+
+def calculate_mean_nodedgr(merged, merged_sizes, node_dgree):
+    cluster_center_mnd = {}
+    for i in range(len(merged)):
+        if merged[i] in cluster_center_mnd:
+            cluster_center_mnd[merged[i]] += node_dgree[i]
+        else:
+            cluster_center_mnd[merged[i]] = node_dgree[i]
+    for cc in cluster_center_mnd.keys():
+        cluster_center_mnd[cc] = cluster_center_mnd[cc] / merged_sizes[cc]
+    return cluster_center_mnd
+
+def get_second_center(merged, big_ccs):
+    second_cc = {}
+    for center in big_ccs.keys():
+        # Durchlaufe solange andere Knoten bis einer aus dem selben Cluster gefunden wurde
+        for i in range(len(merged)):
+            # nicht der selbe Knoten ist gesucht
+            if i == center:
+                continue
+            # sondern der erste, der einen anderen Index hat aber den selben Eintrag:
+            if merged[i] == merged[center]:
+                second_cc[center] = i
+                break
+    return second_cc
+
+@njit
+def weighted_decision_2(s_center, b_center, sb_center, connectivity, vertex_costs, sizes, parents):
+    costs_0 = 0.0
+    costs_1 = 0.0
+    count_0 = 0
+    count_1 = 0
+    for x in range(0, len(connectivity)):
+        if connectivity[x] == -1:
+            continue
+        if connectivity[x] == 1:
+            costs_1 += vertex_costs[x][s_center] + vertex_costs[x][b_center] + vertex_costs[x][sb_center]
+            count_1 += 1
+        else:
+            costs_0 += vertex_costs[x][s_center] + vertex_costs[x][b_center] + vertex_costs[x][sb_center]
+            count_0 += 1
+
+    if count_0 > 0:
+        cost_0 = costs_0/count_0
+        if count_1 > 0:
+            cost_1 = costs_1/count_1
+            if cost_0 == 0 and cost_1 == 0:
+                print("Warning: Both together and single get cost 0 - something went wrong!")
+            else:
+                return (cost_0 - cost_1) / (cost_0 + cost_1)
+
+        else:
+            # Falls kein Eintrag 1, gehört Knoten recht sicher nicht zum Cluster
+            return -1.0
+    else:
+        # Falls kein Eintrag 0, gehört Knoten recht sicher zum Cluster
+        return 1.0
+
+
+def repair_merged_v2(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+    sol_len = len(solution_costs)
+    # Arrays anlegen für Vergleichbarkeit der Cluster:
+    connectivity = np.zeros(sol_len, dtype=np.int8) #np.bool not supported
+    big_ccs = get_cluster_centers_big(merged, merged_sizes, node_dgree, 0.3)
+    small_ccs = get_cluster_centers_small(merged, merged_sizes, node_dgree, 0.3)
+    second_big_cc = get_second_center(merged, big_ccs)
+
+    for s_center in small_ccs.keys():
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        max_wd = -1
+        best_fit = s_center
+        # Fülle connectivity-Array (0: keine Verbindung zu Cluster; 1: eine Verbindung, 2: zwei Verbindungen)
+        for b_center in big_ccs.keys():
+            # Falls Cluster zusammen deutlich zu groß wären, überspringe diese Kombination direkt
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.5 * node_dgree[b_center]:
+                continue
+            for x in range(0,sol_len):
+                if parents[x][b_center] != parents[x][second_big_cc[b_center]]:
+                    connectivity[x] = -1
+                    continue
+                if parents[x][s_center] == parents[x][b_center]:
+                    connectivity[x] = 1
+                else:
+                    connectivity[x] = 0
+            # Berechne Gewicht:
+            wd = weighted_decision_2(s_center, b_center, second_big_cc[b_center], connectivity, vertex_costs, sizes, parents)
+            # Aktualisiere ggf. best-passenden Knoten
+            if wd > max_wd:
+                max_wd = wd
+                best_fit = b_center
+        # ggf. Modifikation, nur union falls auch max_wd passt.
+        if max_wd > 0.05:
+            union(s_center, best_fit, merged, merged_sizes)
+    result = np.zeros((2,n), dtype=np.int64)
+    result[0] = merged
+    result[1] = merged_sizes
+    return result
+
+def greedy_find_local_best(local_best, x, y, z, vertex_costs):
+    cand = np.zeros(3, dtype=np.int64)
+    cand[0] = local_best[x]
+    cand[1] = local_best[y]
+    cand[2] = local_best[z]
+    costs = np.zeros(3, dtype=np.float64)
+    costs[0] = vertex_costs[cand[0]][x] + vertex_costs[cand[0]][y] + vertex_costs[cand[0]][z]
+    costs[1] = vertex_costs[cand[1]][x] + vertex_costs[cand[1]][y] + vertex_costs[cand[1]][z]
+    costs[2] = vertex_costs[cand[2]][x] + vertex_costs[cand[2]][y] + vertex_costs[cand[2]][z]
+
+    best = np.argmin(costs)
+    return cand[best]
+
+
+def repair_merged_local(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+    sol_len = len(solution_costs)
+    big_ccs = get_cluster_centers_big(merged, merged_sizes, node_dgree, 0.3)
+    small_ccs = get_cluster_centers_small(merged, merged_sizes, node_dgree, 0.3)
+    second_big_cc = get_second_center(merged, big_ccs)
+    # O(n * x log x), weil für jeden Knoten x Einträge sortiert werden
+    # Optimierungsmöglichkeit: nur Spalten sortieren, deren Knoten Clusterwurzeln sind.
+    cost_sorted = np.argsort(vertex_costs, axis=0)
+    local_best = cost_sorted[0]
+    local_worst = cost_sorted[sol_len-1]
+    worst_vertex_costs = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        worst_vertex_costs[i] = vertex_costs[local_worst[i]][i]
+
+    for s_center in small_ccs.keys():
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        best_fit = s_center
+        min_s_cost = worst_vertex_costs[s_center]
+        for b_center in big_ccs.keys():
+            # Falls Cluster zusammen deutlich zu groß wären, überspringe diese Kombination direkt
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.6 * node_dgree[b_center]:
+                continue
+            local_i = greedy_find_local_best(local_best, s_center, b_center, second_big_cc[b_center], vertex_costs)
+            local_solution = parents[local_i]
+            # Falls der Knoten in der (greedy) lokal besten Lösung mit einem der beiden Cluster-Repräsentanten verbunden ist, führe Union durch.
+            if local_solution[s_center] == local_solution[b_center] or local_solution[s_center] == local_solution[second_big_cc[b_center]]:
+                if vertex_costs[local_i][s_center] < min_s_cost:
+                    best_fit = b_center
+                    min_s_cost = vertex_costs[local_i][s_center]
+        # Verbinde das Cluster mit dem Cluster, das lokal betrachtet die geringsten Knotenkosten einbrachte.
+        union(s_center, best_fit, merged, merged_sizes)
+    result = np.zeros((2,n), dtype=np.int64)
+    result[0] = merged
+    result[1] = merged_sizes
+    return result
 
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """

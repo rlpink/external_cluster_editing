@@ -223,14 +223,16 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         # Glätten der Lösung falls Baumstruktur auftritt
         for j in range(0,n):
             flattening_find(j, merged_solutions[i])
-        rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
+        #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
+        # rep = repair_merged_v2(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
+        rep = repair_merged_local(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
         merged_solutions[i] = rep[0]
         merged_sizes[i] = rep[1]
         # Sicherheitshalber noch mal glätten für Lösungsberechnung:
         for j in range(0,n):
             flattening_find(j, merged_solutions[i])
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
-    # Da Merge nur noch x2 Lösungen verwendet, nur diese angeben:
+    # Da Merge auf x2 Lösungen basiert, nur diese angeben:
     x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
     all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
