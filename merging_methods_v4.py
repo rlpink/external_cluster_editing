@@ -158,7 +158,7 @@ def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, s
 
             for j in range(n):
                 # Überspringe bereits verbundene Knoten und sich selbst
-                if i == j or merged[i] == merged[j]:
+                if merged[i] == merged[j]:
                     continue
                 # Berechne Gewicht:
                 wd = weighted_decision(i, j, cluster_masks, vertex_costs, sizes, parents)
@@ -191,17 +191,6 @@ def get_cluster_centers_small(merged, merged_sizes, node_dgree, split):
             small_ccs[merged[i]] = merged_sizes[merged[i]]
     return small_ccs
 
-def calculate_mean_nodedgr(merged, merged_sizes, node_dgree):
-    cluster_center_mnd = {}
-    for i in range(len(merged)):
-        if merged[i] in cluster_center_mnd:
-            cluster_center_mnd[merged[i]] += node_dgree[i]
-        else:
-            cluster_center_mnd[merged[i]] = node_dgree[i]
-    for cc in cluster_center_mnd.keys():
-        cluster_center_mnd[cc] = cluster_center_mnd[cc] / merged_sizes[cc]
-    return cluster_center_mnd
-
 def get_second_center(merged, big_ccs):
     second_cc = {}
     for center in big_ccs.keys():
@@ -233,9 +222,9 @@ def weighted_decision_2(s_center, b_center, sb_center, connectivity, vertex_cost
             count_0 += 1
 
     if count_0 > 0:
-        cost_0 = costs_0/count_0
+        cost_0 = costs_0/(count_0**2)
         if count_1 > 0:
-            cost_1 = costs_1/count_1
+            cost_1 = costs_1/(count_1**2)
             if cost_0 == 0 and cost_1 == 0:
                 print("Warning: Both together and single get cost 0 - something went wrong!")
             else:
@@ -289,6 +278,49 @@ def repair_merged_v2(merged, merged_sizes, solution_costs, vertex_costs, parents
     result[1] = merged_sizes
     return result
 
+def repair_merged_v3(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+    sol_len = len(solution_costs)
+    ccs = calculate_mean_nodedgr(merged, merged_sizes, node_dgree)
+    second_big_cc = get_second_center(merged, ccs)
+    connectivity = np.zeros(sol_len, dtype=np.int8)
+
+    for s_center in ccs.keys():
+        # s_center soll klein genug sein
+        if merged_sizes[s_center] > ccs[s_center] * 0.35:
+            continue
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        best_fit = s_center
+        max_wd = -0.05
+        for b_center in ccs.keys():
+            # b_center soll groß genug sein
+            if merged_sizes[b_center] <= ccs[b_center] * 0.35:
+                continue
+            # Falls Cluster zusammen deutlich zu groß wären, überspringe diese Kombination direkt
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.5 * ccs[b_center]:
+                continue
+            for x in range(0,sol_len):
+                if parents[x][b_center] != parents[x][second_big_cc[b_center]]:
+                    connectivity[x] = -1
+                    continue
+                if parents[x][s_center] == parents[x][b_center]:
+                    connectivity[x] = 1
+                else:
+                    connectivity[x] = 0
+            # Berechne Gewicht:
+            wd = weighted_decision_2(s_center, b_center, second_big_cc[b_center], connectivity, vertex_costs, sizes, parents)
+            # Aktualisiere ggf. best-passenden Knoten
+            if wd > max_wd:
+                max_wd = wd
+                best_fit = b_center
+        # Verbinde das Cluster mit dem Cluster, das lokal betrachtet die geringsten Knotenkosten einbrachte.
+        union(s_center, best_fit, merged, merged_sizes)
+    result = np.zeros((2,n), dtype=np.int64)
+    result[0] = merged
+    result[1] = merged_sizes
+    return result
+
+
 def greedy_find_local_best(local_best, x, y, z, vertex_costs):
     cand = np.zeros(3, dtype=np.int64)
     cand[0] = local_best[x]
@@ -340,6 +372,61 @@ def repair_merged_local(merged, merged_sizes, solution_costs, vertex_costs, pare
     result[1] = merged_sizes
     return result
 
+def calculate_mean_nodedgr(merged, merged_sizes, node_dgree):
+    cluster_center_mnd = {}
+    for i in range(len(merged)):
+        if merged[i] in cluster_center_mnd:
+            cluster_center_mnd[merged[i]] += node_dgree[i]
+        else:
+            cluster_center_mnd[merged[i]] = node_dgree[i]
+    for cc in cluster_center_mnd.keys():
+        cluster_center_mnd[cc] = cluster_center_mnd[cc] / merged_sizes[cc]
+    return cluster_center_mnd
+
+def repair_merged_local_v2(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+    sol_len = len(solution_costs)
+    ccs = calculate_mean_nodedgr(merged, merged_sizes, node_dgree)
+    second_big_cc = get_second_center(merged, ccs)
+    # O(n * x log x), weil für jeden Knoten x Einträge sortiert werden
+    # Optimierungsmöglichkeit: nur Spalten sortieren, deren Knoten Clusterwurzeln sind.
+    cost_sorted = np.argsort(vertex_costs, axis=0)
+    local_best = cost_sorted[0]
+    local_worst = cost_sorted[sol_len-1]
+    worst_vertex_costs = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        worst_vertex_costs[i] = vertex_costs[local_worst[i]][i]
+
+    for s_center in ccs.keys():
+        # s_center soll klein genug sein
+        if merged_sizes[s_center] > ccs[s_center] * 0.5:
+            continue
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        best_fit = s_center
+        min_s_cost = worst_vertex_costs[s_center]
+        for b_center in ccs.keys():
+            # b_center soll groß genug sein
+            if merged_sizes[b_center] <= ccs[b_center] * 0.5:
+                continue
+            # Falls Cluster zusammen deutlich zu groß wären, überspringe diese Kombination direkt
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.5 * ccs[b_center]:
+                continue
+            local_i = greedy_find_local_best(local_best, s_center, b_center, second_big_cc[b_center], vertex_costs)
+            local_solution = parents[local_i]
+            # Falls der Knoten in der (greedy) lokal besten Lösung mit beiden Cluster-Repräsentanten verbunden ist, ist er ein Kandidat für Union.
+            if local_solution[s_center] == local_solution[b_center] or local_solution[s_center] == local_solution[second_big_cc[b_center]]:
+                # Falls die Knotenkosten dieser lokalen Lösung geringer sind als bisheriger Lösungen,
+                if vertex_costs[local_i][s_center] < min_s_cost:
+                    # aktualisiere besten "Union-Partner" und die minimal beobachteten Knotenkosten.
+                    best_fit = b_center
+                    min_s_cost = vertex_costs[local_i][s_center]
+        # Verbinde das Cluster mit dem Cluster, das lokal betrachtet die geringsten Knotenkosten einbrachte.
+        union(s_center, best_fit, merged, merged_sizes)
+    result = np.zeros((2,n), dtype=np.int64)
+    result[0] = merged
+    result[1] = merged_sizes
+    return result
+
 def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """
     A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
@@ -352,3 +439,14 @@ def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
             file.write(f"costs: {costs[j]}\n")
             for i in range(0,n):
                 file.write(f"{solutions[j][i]} ")
+
+def merged_short_print(solutions, costs, filename, missing_weight, n, x, n_merges):
+    for j in range(n_merges):
+        cluster_sizes = {}
+        for i in range(n):
+            curr = solutions[j][i]
+            if curr in cluster_sizes:
+                cluster_sizes[curr] += 1
+            else:
+                cluster_sizes[curr] = 1
+        print(cluster_sizes)
