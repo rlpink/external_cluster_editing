@@ -212,7 +212,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     # good_costs_i = np.where(solution_costs <= best_costs * 1.7)
     # Variante 2: Beste 10% verwenden
     top_percent = range(np.int64(x*0.1))
-    mid_percent = range(np.int64(x*0.5))
+    mid_percent = range(np.int64(x*0.90))
     cost_sorted_i = np.argsort(solution_costs)
     good_costs_i = cost_sorted_i[top_percent]
     mid_costs_i = cost_sorted_i[mid_percent]
@@ -228,7 +228,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             flattening_find(j, merged_solutions[i])
         #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
         #NEW: mid_costs_i - Modifikation!!
-        rep = repair_merged_v3(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr)
+        rep = repair_merged_v4_nd(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr)
         merged_solutions[i] = rep[0]
         merged_sizes[i] = rep[1]
         # Sicherheitshalber noch mal glätten für Lösungsberechnung:
@@ -238,5 +238,5 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     # Da Merge auf x2 Lösungen basiert, nur diese angeben:
     x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
-    all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
+    #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
     merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
