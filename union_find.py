@@ -46,6 +46,28 @@ def union(x, y, parent, size):
         #print("set size")
     return True
 
+@njit
+def rem_union(x, y, parent):
+    """
+    This function is a slightly faster version of the regular union. It does not need sizes and potentially shortens the search path in case x and y are already connected.
+    """
+    while parent[x] != parent[y]:
+        if parent[x] < parent[y]:
+            if x == parent[x]:
+                parent[x] = parent[y]
+                return
+            z = parent[x]
+            parent[x] = parent[y]
+            x = z
+        else:
+            if y == parent[y]:
+                parent[y] = parent[x]
+                return
+            z = parent[y]
+            parent[y] = parent[x]
+            y = z
+
+
 #path compression for flattened uf-trees
 @njit
 def flattening_find(x, parent):

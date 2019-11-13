@@ -5,9 +5,9 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-from merging_methods_v2 import *
+from merging_methods_v5 import *
 import csv
-from uf_cluster_editing_v2 import *
+from uf_cluster_editing_v5 import *
 import datetime
 
 """

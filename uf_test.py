@@ -4,7 +4,7 @@ from numpy import random as rand
 from union_find import *
 import pytest
 from itertools import chain
-
+import datetime
 """
 This module contains some basic tests for correctness of the union_find module.
 """
@@ -45,3 +45,53 @@ def test_flattening_find():
     for i in range(0, n):
         assert parent[i] == root
 
+
+def test_rem_union():
+    np.random.seed(123)
+    set_time = True
+    for r in range(100):
+        start_time = datetime.datetime.now()
+        parent = np.arange(10000)
+        for i in range(25000):
+            xy = np.random.randint(10000, size=2)
+            rem_union(xy[0], xy[1], parent)
+        for i in range(10000):
+            parent[i] = flattening_find(i, parent)
+        end_time = datetime.datetime.now()
+        if set_time:
+            time_sum = end_time-start_time
+        else:
+            time_sum += end_time-start_time
+    print(time_sum / 100)
+    return(parent)
+
+def test_union2():
+    np.random.seed(123)
+    set_time = True
+    for r in range(100):
+        start_time = datetime.datetime.now()
+        parent = np.arange(10000)
+        size = np.ones(10000)
+        for i in range(25000):
+            xy = np.random.randint(10000, size=2)
+            union(xy[0], xy[1], parent, size)
+        for i in range(10000):
+            parent[i] = flattening_find(i, parent)
+        end_time = datetime.datetime.now()
+        if set_time:
+            time_sum = end_time-start_time
+        else:
+            time_sum += end_time-start_time
+    print(time_sum / 100)
+    return(parent)
+
+def test_flattening_find_size():
+        parent = np.arange(50)
+        size = np.zeros(50)
+        for i in range(20):
+            xy = np.random.randint(50, size=2)
+            rem_union(xy[0], xy[1], parent)
+        for i in range(50):
+            parent[i] = flattening_find_size(i, parent, size)
+        print(parent)
+        print(size)
