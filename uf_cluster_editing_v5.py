@@ -228,17 +228,13 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         for j in range(0,n):
             r = flattening_find(j, merged_solutions[i])
             merged_sizes[i, r] += 1
-        #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
-        rep = repair_merged_v4_nd_rem(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr)
+        merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
+        rep = repair_merged_v4_nd_rem(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3)
         merged_solutions[i] = rep
         merged_sizes[i] = np.zeros(n, dtype=np.int64)
-        # # Sicherheitshalber noch mal glätten für Lösungsberechnung:
-        # for j in range(0,n):
-        #     r = flattening_find(j, merged_solutions[i])
-        #     merged_sizes[i, r] += 1
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     # Da Merge auf x2 Lösungen basiert, nur diese angeben:
     x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
     #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
-    #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
