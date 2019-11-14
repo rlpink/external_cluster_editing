@@ -428,8 +428,7 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
         # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
         # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
         best_fit = s_center
-        set_first_mwc = True
-        min_mwc = 0.5
+        min_mwc = 1.7976931348623157e+308
         observed_jump = False
         for b_center_i in range(len(ccs)):
             # b_center soll groß genug sein
@@ -437,7 +436,7 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
             if merged_sizes[b_center] <= mean_ndgree[b_center_i] * 0.3:
                 continue
             # Falls Cluster zusammen deutlich zu groß wären, überspringt diese Kombination direkt (zu groß: mehr als 0.29 zusätzlich
-            # wegen 2/9 Fehlerrate maximal die von den 7/9 übrigen Kanten jeweils fehlen darf
+            # wegen 2/9 Fehlerrate maximal die von den 7/9 übrigen Kanten jeweils fehlen darf.
             if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
                 continue
             for x in range(0,sol_len):
@@ -454,12 +453,12 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
                 mwc = mean_weight_connected(s_center, second_big_cc[b_center_i], connectivity, vertex_costs, sizes, parents)
                 if mwc == -1:
                     continue
-            if set_first_mwc or mwc < min_mwc:
+            if mwc < min_mwc:
                 # Ermittle Unterschied zu Kosten bei neuer Clusterzuordnung,
                 # bzw. ob ein Sprung stattgefunden hat:
                 if min_mwc == 0:
                     observed_jump = True
-                elif mwc / min_mwc <= 0.5:
+                elif mwc / min_mwc <= 0.6:
                     observed_jump = True
                 # Der Sprung muss bei der letzten Änderung passiert sein, da ansonsten noch geringere Kosten gefunden wurden.
                 else:
@@ -467,17 +466,16 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
                 # Erst danach Aktualisieren von Minimalen Kosten
                 min_mwc = mwc
                 best_fit = b_center
-                set_first_mwc = False
 
         # if best_fit == s_center:
         #     print("Knoten %d wurde nicht verbunden.\n" % (s_center))
         # Verbinde das Cluster mit dem Cluster, das im Mittel für s_center am günstigsten ist.
         # Falls kein "Sprung" in den Kosten beobachtet wurde (und zwar hin zu den günstigsten Kosten),
         # dann wurde das richtige Cluster nicht gefunden (weil größte ZHK <= 0.3 war).
-        if observed_jump:
-            rem_union(s_center, best_fit, merged)
-            # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
-            merged_sizes[best_fit] += merged_sizes[s_center]
+        #if observed_jump:
+        rem_union(s_center, best_fit, merged)
+        # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
+        merged_sizes[best_fit] += merged_sizes[s_center]
     return merged
 
 @njit

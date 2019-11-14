@@ -92,6 +92,8 @@ def test_flattening_find_size():
             xy = np.random.randint(50, size=2)
             rem_union(xy[0], xy[1], parent)
         for i in range(50):
-            parent[i] = flattening_find_size(i, parent, size)
-        print(parent)
+            root = flattening_find(i, parent)
+            size[root] += 1
+        print(np.unique(parent))
+        print(sum(size))
         print(size)

@@ -49,7 +49,8 @@ def union(x, y, parent, size):
 @njit
 def rem_union(x, y, parent):
     """
-    This function is a slightly faster version of the regular union. It does not need sizes and potentially shortens the search path in case x and y are already connected.
+    This function is a slightly faster version of the regular union.
+    It does not need sizes and potentially shortens the search path in case x and y are already connected.
     """
     while parent[x] != parent[y]:
         if parent[x] < parent[y]:

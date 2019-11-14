@@ -387,31 +387,6 @@ def mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes,
     return mwc/count
 
 @njit
-def mean_weight_disconnected(s_center, ccs, vertex_costs, sizes, parents, connectivity, border, merged_sizes, mean_ndgree):
-    sol_len = len(connectivity)
-    mwc = 0.0
-    count = 0
-    for i in range(sol_len):
-        disconnected = True
-        for j in range(len(ccs)):
-            b_center = ccs[j]
-            if merged_sizes[b_center] <= mean_ndgree[b_center] * 0.3:
-                continue
-            # Sobald diese Lösung sich als "verbunden" herausstellt, mach weiter.
-            if parents[i, s_center] == parents[i, b_center]:
-                disconnected = False
-                break
-        # Falls diese Lösung am Ende mit keinem großen Clusterzenter verbunden ist, addiere Kosten.
-        if disconnected:
-            mwc += vertex_costs[i, s_center]
-            count += 1
-    if count == 0:
-        # Als initialer Wert verwendet - wenn keine sinnvolle Schätzung gemacht werden kann, verwende etwas, das
-        # inf nahe genug kommt. (numba unterstützt kein inf).
-        return 1000000000.0
-    return mwc/count
-
-@njit
 def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
     sol_len = len(solution_costs)
     ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
@@ -428,7 +403,7 @@ def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, pare
         # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
         # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
         best_fit = s_center
-        min_mwc = 1000000000
+        min_mwc = 1.7976931348623157e+308
         for b_center_i in range(len(ccs)):
             # b_center soll groß genug sein
             b_center = ccs[b_center_i]
@@ -447,13 +422,16 @@ def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, pare
             mwc = mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents)
             # Aktualisiere ggf. best-passenden Knoten
             if mwc == -1:
-                # Ist mwc -1 bedeutet das, diese Knoten waren nie verbunden. Berechne dann Verbundenheit zu einem zweiten Kandidaten aus dem Cluster:
+                # Ist mwc -1 bedeutet das, diese Knoten waren nie verbunden.
+                # Berechne dann Verbundenheit zu einem zweiten Kandidaten aus dem Cluster:
                 mwc = mean_weight_connected(s_center, second_big_cc[b_center_i], connectivity, vertex_costs, sizes, parents)
                 if mwc == -1:
                     continue
             if mwc < min_mwc:
+                # Aktualisieren von Minimalen Kosten
                 min_mwc = mwc
                 best_fit = b_center
+
         # if best_fit == s_center:
         #     print("Knoten %d wurde nicht verbunden.\n" % (s_center))
         # Verbinde das Cluster mit dem Cluster, das im Mittel für s_center am günstigsten ist.

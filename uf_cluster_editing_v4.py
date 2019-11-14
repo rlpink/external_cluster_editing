@@ -239,4 +239,4 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     x2 = len(good_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
     #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
-    merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
