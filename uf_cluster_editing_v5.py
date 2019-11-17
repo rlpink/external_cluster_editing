@@ -34,7 +34,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
 
 
 ### Preprocessing ###
-    print("Begin preprocessing\n")
 # Knotengrade berechnen je Knoten (Scan über alle Kanten)
     node_dgr = np.zeros(n, dtype=np.int64)
 
@@ -54,7 +53,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
 # Sequentiell für alle Lösungen (alle UF-Strukturen gleichzeitig, oder zumindest so viele wie passen):
 # Größe einer Lösung: Array mit n Einträgen aus je 64bit
 ### Generate Solutions ###
-    print("begin solution generation")
     parents = np.full((x,n), np.arange(n, dtype=np.int64))
     sizes = np.zeros((x,n), dtype=np.int64)
     # Modellparameter einlesen:
@@ -80,7 +78,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
             for i in range(0,x):
                 if cluster_model[i] != c_opt:
                     parents[i] = np.arange(n, dtype=np.int64)
-                    sizes[i] = np.zeros(n, dtype = np.int64)
 
     # 2. Scan über alle Kanten: Je Kante samplen in UF-Strukturen
         graph_file = open(filename, mode="r")
@@ -117,14 +114,11 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
 # Und Berechnung benötigter Kanten je Cluster (n_c * (n_c-1) / 2) pro UF
 
     def calculate_costs(solutions_parents, x, merged):
-        if merged:
-            inner_sizes = merged_sizes
-        else:
-            inner_sizes = sizes
-        print("begin solution assessment")
+
         solution_costs = np.zeros(x, dtype=np.float64)
         vertex_costs = np.zeros((x,n), dtype=np.float64)
         c_edge_counter = np.zeros((x,n), dtype=np.int64)
+        inner_sizes = np.zeros((x,n), dtype=np.int64)
 
         for i in range(x):
             for j in range(n):
@@ -188,7 +182,6 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
 
 # Mithilfe der Bewertungen/Kosten Lösungen sinnvoll mergen/reparieren
 # Platzhalter: Beste Lösung direkt übernehmen
-    print("begin solution merge")
 
     mean_costs_c = np.zeros(37, dtype=np.float64)
     c_count = np.zeros(37, dtype= np.int64)
@@ -213,28 +206,38 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     # good_costs_i = np.where(solution_costs <= best_costs * 1.7)
     # Variante 2: Beste 10% verwenden
     top_percent = range(np.int64(x*0.1))
-    mid_percent = range(np.int64(x*0.90))
+    mid_percent = range(np.int64(x*0.9))
     cost_sorted_i = np.argsort(solution_costs)
     good_costs_i = cost_sorted_i[top_percent]
     mid_costs_i = cost_sorted_i[mid_percent]
     # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
-    merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
+    merged_sizes = np.zeros((n_merges,n), dtype=np.int64)
     for i in range(0,n_merges):
         merged = merged_solution(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n)
-        merged_solutions[i] = merged[0]
-        merged_sizes[i] = merged[1]
-        # Glätten der Lösung falls Baumstruktur auftritt
+        merged_solutions[i] = merged
+        merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
+        merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), n_merges)
+        # Glätten der Lösung + Berechnung der korrekten merged_sizes (vorher 0, innerhalb calculate_costs berechnet aber nicht verändert)
         for j in range(0,n):
             r = flattening_find(j, merged_solutions[i])
             merged_sizes[i, r] += 1
-        merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
         rep = repair_merged_v4_nd_rem(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3)
         merged_solutions[i] = rep
-        merged_sizes[i] = np.zeros(n, dtype=np.int64)
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
+    print(merged_costs)
     # Da Merge auf x2 Lösungen basiert, nur diese angeben:
-    x2 = len(good_costs_i)
+    x2 = len(mid_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
-    #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
-    merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
+    print_solution_costs(solution_costs[good_costs_i], filename)
+    #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+
+@njit
+def check_if_flat(solution):
+    for i in range(len(solution)):
+        # Prüfe, ob Knoten i Wurzel ist oder Kind 1. Ebene
+        if solution[i] != i and solution[solution[i]] != solution[i]:
+            # falls es beides nicht ist, ist der Baum nicht flach!
+            return False
+    return True

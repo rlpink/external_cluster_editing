@@ -29,7 +29,7 @@ def print_solution_costs(solution_costs, filename):
     This function outputs all sorted solution costs to a ifle named "..._solution_costs.txt".
     """
     sorted_costs = np.sort(solution_costs)
-    print_to = filename[:-4] + "_solution_costs.txt"
+    print_to = filename[:-4] + "_solution_costs_v5.txt"
     with open(print_to, mode="a") as file:
         for cost in sorted_costs:
             file.write(str(cost))
@@ -40,7 +40,7 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n):
     This function outputs all solutions, sorted by their costs, to a ifle named "all_solutions.txt".
     """
     cost_sorted_i = np.argsort(solution_costs)
-    print_to = filename[:-4] + "_all_solutions.txt"
+    print_to = filename[:-4] + "_all_solutions_v5.txt"
     count = 1
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d\n" % (filename, missing_weight, n))
@@ -108,7 +108,6 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
 
     # Neue Lösung als Array anlegen:
     merged_sol = np.arange(n) #dtype = np.int64 not supported by numba
-    merged_sizes = np.zeros(n, dtype=np.int64)
 
     # Arrays anlegen für Vergleichbarkeit der Cluster:
     cluster_masks = np.zeros((sol_len,n), dtype=np.int8) #np.bool not supported
@@ -131,11 +130,8 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
             # Falls Gewicht groß genug:
             if wd > 0.05:
                 rem_union(j, k, merged_sol)
-    result = np.zeros((2,n))
-    result[0] = merged_sol
-    result[1] = merged_sizes
 
-    return result
+    return merged_sol
 
 @njit
 def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
@@ -392,7 +388,6 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
     ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
     ccs = ccs_mndgr[0]
     mean_ndgree = ccs_mndgr[1]
-    second_big_cc = get_second_center_nd(merged, ccs)
     connectivity = np.zeros(sol_len, dtype=np.int8)
 
     for s_center_i in range(len(ccs)):
@@ -414,23 +409,13 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
             if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
                 continue
             for x in range(0,sol_len):
-                # Unterscheide vier Fälle: -1/-2: s_center nur mit einem verbunden; 1: mit beiden; 0: mit keinem
                 if parents[x, s_center] == parents[x, b_center]:
                     connectivity[x] = 1
                 else:
                     connectivity[x] = 0
             # Berechne Gewicht:
-            mwc1 = mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents)
-            mwc2 = mean_weight_connected(s_center, second_big_cc[b_center_i], connectivity, vertex_costs, sizes, parents)
-            # Aktualisiere ggf. best-passenden Knoten
-            # Standardfall: Beide mwc wurden berechnet; nimm Mittelwert daraus.
-            mwc = mwc1 + mwc2 / 2
-            # Fange alle Fälle mit einem mwc1/2 von -1 ab (da der Wert dann ungültig ist), überschreibe mwc
-            # bei zweifachem -1 (also vorher mwc mit -1 überschrieben) überspringe diesen Kandidaten.
-            if mwc1 == -1:
-                mwc = mwc2
-            if mwc2 == -1:
-                mwc = mwc1
+            mwc = mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents)
+            # Aktualisiere ggf. best-passenden Knoten und minimalen mwc
             if mwc == -1:
                 continue
             if mwc < min_mwc:
@@ -438,6 +423,58 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
                 best_fit = b_center
 
         # Verbinde das Cluster mit dem Cluster, das im Mittel für s_center am günstigsten ist.
+        rem_union(s_center, best_fit, merged)
+        # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
+        merged_sizes[best_fit] += merged_sizes[s_center]
+    return merged
+
+@njit
+def calculate_frequencies(s_center, ccs, merged, merged_sizes, mean_ndgree, parents, sol_len, frequency, big_border):
+    # Gehe jede Lösung durch
+    for x in range(sol_len):
+        # und jedes große Cluster b_center
+        for b_center_i in range(len(ccs)):
+            b_center = ccs[b_center_i]
+            # falls kein großes Cluster, weiter
+            if merged_sizes[b_center] <= mean_ndgree[b_center_i] * big_border:
+                continue
+            # falls Clustergrößen inkompatibel wären, auch weiter
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
+                continue
+            # falls in Lösung s_center direkt mit b_center verbunden ist: erhöhe Häufigkeit; betrachte nächstes b_center.
+            if parents[x, s_center] == parents[x, b_center]:
+                frequency[b_center] += 1
+                continue
+            # ansonsten teste ob s_center mit irgendeinem anderen Knoten aus dem b_center-Cluster in merged verbunden ist:
+            else:
+                b_center_members = np.where(merged == b_center)[0]
+                for i in b_center_members:
+                    if parents[x, s_center] == parents[x, i]:
+                        frequency[b_center] += 1
+                        # sobald die erste Verbindung zu b_center gefunden wurde, brich Scan ab
+                        break
+    return frequency
+
+@njit
+def repair_merged_v5_rem(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
+    sol_len = len(solution_costs)
+    ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
+    ccs = ccs_mndgr[0]
+    mean_ndgree = ccs_mndgr[1]
+    frequency = np.zeros(n, dtype=np.int8)
+
+    for s_center_i in range(len(ccs)):
+        # s_center soll klein genug sein
+        s_center = ccs[s_center_i]
+        if merged_sizes[s_center] > mean_ndgree[s_center_i] * big_border:
+            continue
+        # Array wieder leeren (nach jedem Befüllen)
+        for i in range(n):
+            frequency[i] = 0
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden).
+        frequency = calculate_frequencies(s_center, ccs, merged, merged_sizes, mean_ndgree, parents, sol_len, frequency, big_border)
+        best_fit = np.argmax(frequency)
+        # Verbinde das Cluster mit dem Cluster, das mit s_center am häufigsten verbunden ist.
         rem_union(s_center, best_fit, merged)
         # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
         merged_sizes[best_fit] += merged_sizes[s_center]
@@ -586,7 +623,7 @@ def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """
     A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
     """
-    print_to = filename[:-4] + "_merged.txt"
+    print_to = filename[:-4] + "_merged_v5.txt"
     cost_sorted_j = np.argsort(costs)
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions merged): %d\nmerged solutions:\n" % (filename, missing_weight, n, x))

@@ -29,7 +29,7 @@ def print_solution_costs(solution_costs, filename):
     This function outputs all sorted solution costs to a ifle named "..._solution_costs.txt".
     """
     sorted_costs = np.sort(solution_costs)
-    print_to = filename[:-4] + "_solution_costs.txt"
+    print_to = filename[:-4] + "_solution_costs_v4.txt"
     with open(print_to, mode="a") as file:
         for cost in sorted_costs:
             file.write(str(cost))
@@ -40,7 +40,7 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n):
     This function outputs all solutions, sorted by their costs, to a ifle named "all_solutions.txt".
     """
     cost_sorted_i = np.argsort(solution_costs)
-    print_to = filename[:-4] + "_all_solutions.txt"
+    print_to = filename[:-4] + "_all_solutions_v4.txt"
     count = 1
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d\n" % (filename, missing_weight, n))
@@ -387,18 +387,17 @@ def mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes,
     return mwc/count
 
 @njit
-def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
+def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
     sol_len = len(solution_costs)
     ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
     ccs = ccs_mndgr[0]
     mean_ndgree = ccs_mndgr[1]
-    second_big_cc = get_second_center_nd(merged, ccs)
     connectivity = np.zeros(sol_len, dtype=np.int8)
 
     for s_center_i in range(len(ccs)):
         # s_center soll klein genug sein
         s_center = ccs[s_center_i]
-        if merged_sizes[s_center] > mean_ndgree[s_center_i] * 0.3:
+        if merged_sizes[s_center] > mean_ndgree[s_center_i] * big_border:
             continue
         # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
         # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
@@ -407,26 +406,20 @@ def repair_merged_v4_nd(merged, merged_sizes, solution_costs, vertex_costs, pare
         for b_center_i in range(len(ccs)):
             # b_center soll groß genug sein
             b_center = ccs[b_center_i]
-            if merged_sizes[b_center] <= mean_ndgree[b_center_i] * 0.3:
+            if merged_sizes[b_center] <= mean_ndgree[b_center_i] * big_border:
                 continue
             # Falls Cluster zusammen deutlich zu groß wären, überspringt diese Kombination direkt
-            if merged_sizes[s_center] + merged_sizes[b_center] > 1.5 * mean_ndgree[b_center_i]:
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
                 continue
             for x in range(0,sol_len):
-                # Unterscheide vier Fälle: -1/-2: s_center nur mit einem verbunden; 1: mit beiden; 0: mit keinem
                 if parents[x, s_center] == parents[x, b_center]:
                     connectivity[x] = 1
                 else:
                     connectivity[x] = 0
             # Berechne Gewicht:
             mwc = mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents)
-            # Aktualisiere ggf. best-passenden Knoten
             if mwc == -1:
-                # Ist mwc -1 bedeutet das, diese Knoten waren nie verbunden.
-                # Berechne dann Verbundenheit zu einem zweiten Kandidaten aus dem Cluster:
-                mwc = mean_weight_connected(s_center, second_big_cc[b_center_i], connectivity, vertex_costs, sizes, parents)
-                if mwc == -1:
-                    continue
+                continue
             if mwc < min_mwc:
                 # Aktualisieren von Minimalen Kosten
                 min_mwc = mwc
@@ -584,7 +577,7 @@ def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
     """
     A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
     """
-    print_to = filename[:-4] + "_merged.txt"
+    print_to = filename[:-4] + "_merged_v4.txt"
     cost_sorted_j = np.argsort(costs)
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions merged): %d\nmerged solutions:\n" % (filename, missing_weight, n, x))

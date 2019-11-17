@@ -5,6 +5,7 @@ from union_find import *
 import pytest
 from itertools import chain
 import datetime
+import pandas as pd
 """
 This module contains some basic tests for correctness of the union_find module.
 """
@@ -97,3 +98,33 @@ def test_flattening_find_size():
         print(np.unique(parent))
         print(sum(size))
         print(size)
+
+def test_rem_equals_union():
+    for r in range(500):
+        parent = np.arange(10000)
+        parent2 = np.arange(10000)
+        size = np.ones(10000)
+        size2 = np.zeros(10000)
+        for i in range(25000):
+            xy = np.random.randint(10000, size=2)
+            union(xy[0], xy[1], parent, size)
+            rem_union(xy[0], xy[1], parent2)
+        for i in range(10000):
+            parent[i] = flattening_find(i, parent)
+            parent2[i] = flattening_find(i, parent2)
+            size2[parent2[i]] += 1
+        roots = pd.unique(parent)
+        n_clusts = len(roots)
+        roots2 = pd.unique(parent2)
+        n_clusts2 = len(roots2)
+        assert n_clusts == n_clusts2
+        for i in range(n_clusts):
+            assert size[roots[i]] == size2[roots2[i]]
+            c_root = roots[i]
+            c_root2 = roots2[i]
+            for j in range(10000):
+                if parent[j] == c_root:
+                    assert parent2[j] == c_root2
+                if parent2[j] == c_root2:
+                    assert parent[j] == c_root
+
