@@ -173,10 +173,11 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
                     # Kosten für komplett fehlende Kanten zur Lösung addieren
                     vertex_costs[i, j] += missing_edges * (-missing_weight) * 0.5
                     solution_costs[i] += missing_edges * (-missing_weight) * 0.5 # Zwei Knoten innerhalb eines Clusters vermissen die selbe Kante, daher *0.5 bei Berechnung über die Knoten
-        return (vertex_costs, solution_costs)
+        return (vertex_costs, solution_costs, inner_sizes)
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
+    sizes = costs[2]
 
 ### Solution Merge ###
 
@@ -214,11 +215,12 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.zeros((n_merges,n), dtype=np.int64)
     for i in range(0,n_merges):
-        merged = merged_solution(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n)
+        merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename)
         merged_solutions[i] = merged
         merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
         merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), n_merges)
         # Glätten der Lösung + Berechnung der korrekten merged_sizes (vorher 0, innerhalb calculate_costs berechnet aber nicht verändert)
+        print(merged_costs)
         for j in range(0,n):
             r = flattening_find(j, merged_solutions[i])
             merged_sizes[i, r] += 1
@@ -229,8 +231,8 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     # Da Merge auf x2 Lösungen basiert, nur diese angeben:
     x2 = len(mid_costs_i)
     merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
-    all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
-    print_solution_costs(solution_costs[good_costs_i], filename)
+    #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
+    #print_solution_costs(solution_costs[good_costs_i], filename)
     #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
 
 @njit

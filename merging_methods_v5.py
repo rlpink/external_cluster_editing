@@ -133,6 +133,93 @@ def merged_solution(solution_costs, vertex_costs, parents, sizes, missing_weight
 
     return merged_sol
 
+
+@njit
+def weighted_decision_scan(x, y, connectivity, f_vertex_costs, f_sizes, f_parents):
+    """
+    This function is a helper function for merging functions. It generates a weight for cluster center x and another node y by counting the costs over all solutions for two scenarios:
+    1: y is in the same cluster as x
+    0: y is in another cluster
+    The return value is between -1 and 1, -1 for certainly not connected, 1 for certainly connected. A value of 0 would indicate that connected or not connected would (in mean) yield the same costs (as in: the error is not big enough to make a difference).
+    """
+    sol_len = len(f_parents)
+    sum_for_0 = 0
+    sum_for_1 = 0
+    count_0 = 0
+    count_1 = 0
+    for i in range(0,sol_len):
+        x_cost = f_vertex_costs[i, x]
+        y_cost = f_vertex_costs[i, y]
+        if connectivity[i]:
+            sum_for_1 += x_cost + y_cost
+            count_1 += 1
+        else:
+            sum_for_0 += x_cost + y_cost
+            count_0 += 1
+
+    if count_0 > 0:
+        cost_0 = sum_for_0/count_0
+        if count_1 > 0:
+            cost_1 = sum_for_1/count_1
+            if cost_0 == 0 and cost_1 == 0:
+                print("Warning: Both together and single get cost 0 - something went wrong!")
+            else:
+                return (cost_0 - cost_1) / (cost_0 + cost_1)
+
+        else:
+            # Falls kein Eintrag 1 gehört Knoten recht sicher nicht zum Cluster
+            return -1.0
+    else:
+        # Falls kein Eintrag 0 gehört Knoten recht sicher zum Cluster
+        return 1.0
+
+    # Falls Rückgabe positiv: Entscheidung für 1 (zusammen), falls negativ: Entscheidung für 0 (getrennt).
+    # Je näher Rückgabewert an 0, desto unsicherer die Entscheidung.
+    # Falls kein voriger Fall eintritt (Häufigkeit entscheidet/ Verhältnis liegt vor):
+    return 0.0
+
+
+def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename):
+    """
+    First merge algorithm. It calculates cluster masks for each cluster center:
+    True, if the node is in the same component with cluster center,
+    False otherwise.
+    For these cluster masks, for each cluster center x and each other node y a weighted decision value is calculated. Is this weight better than the previous one, y gets assigned to new cluster center x. X then gets the weight of the maximum weight over all y, except if that is lower than its previous weight. Tree-like structures can emerge in such cases. Those trees are not handled yet, however they indicate a conflict in the solution, as a node that is both child and parent belongs to two distinct clusters.
+    """
+    sol_len = len(solution_costs)
+
+    # Neue Lösung als Array anlegen:
+    merged_sol = np.arange(n) #dtype = np.int64 not supported by numba
+    merged_sizes = np.ones(n, dtype=np.int64)
+
+    # Arrays anlegen für Vergleichbarkeit der Cluster:
+    connectivity = np.zeros(sol_len, dtype=np.int8) #np.bool not supported
+    graph_file = open(filename, mode="r")
+
+    for line in graph_file:
+        # Kommentar-Zeilen überspringen
+        if line[0] == "#":
+            continue
+        splitted = line.split()
+        nodes = np.array(splitted[:-1], dtype=np.int64)
+        weight = np.float64(splitted[2])
+        i = nodes[0]
+        j = nodes[1]
+        if weight < 0:
+            continue
+        # Fülle Cluster-Masken
+        for x in range(sol_len):
+            connectivity[x] = np.int8(parents[x, i] == parents[x, j])
+        # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
+        # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
+        wd = weighted_decision_scan(i, j, connectivity, vertex_costs, sizes, parents)
+        # Falls Gewicht groß genug:
+        if wd > 0.05:
+            rem_union(i, j, merged_sol)
+
+    return merged_sol
+
+
 @njit
 def repair_merged(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree):
     sol_len = len(solution_costs)
@@ -383,6 +470,19 @@ def mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes,
     return mwc/count
 
 @njit
+def mean_weight_connected2(s_center, b_center, connectivity, vertex_costs, sizes, parents):
+    sol_len = len(connectivity)
+    mwc = 0.0
+    count = 0
+    for i in range(sol_len):
+        if connectivity[i]:
+            mwc += vertex_costs[i, s_center] + vertex_costs[i, b_center]
+            count += 1
+    if count == 0:
+        return -1.0
+    return mwc/count
+
+@njit
 def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
     sol_len = len(solution_costs)
     ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
@@ -414,7 +514,83 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
                 else:
                     connectivity[x] = 0
             # Berechne Gewicht:
-            mwc = mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents)
+            mwc = mean_weight_connected2(s_center, b_center, connectivity, vertex_costs, sizes, parents)
+            # Aktualisiere ggf. best-passenden Knoten und minimalen mwc
+            if mwc == -1:
+                continue
+            if mwc < min_mwc:
+                min_mwc = mwc
+                best_fit = b_center
+
+        # Verbinde das Cluster mit dem Cluster, das im Mittel für s_center am günstigsten ist.
+        rem_union(s_center, best_fit, merged)
+        # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
+        merged_sizes[best_fit] += merged_sizes[s_center]
+    return merged
+@njit
+def check_if_flat(solution):
+    for i in range(len(solution)):
+        # Prüfe, ob Knoten i Wurzel ist oder Kind 1. Ebene
+        if solution[i] != i and solution[solution[i]] != solution[i]:
+            # falls es beides nicht ist, ist der Baum nicht flach!
+            return False
+    return True
+@njit
+def mean_node_weight(node, connectivity, vertex_costs, solutions, sizes, n):
+    mnw_con = 0.0
+    count = np.sum(connectivity)
+    if count == 0:
+        return -1
+    for x in range(len(connectivity)):
+        if not connectivity[x]:
+            continue
+        root = solutions[x, node]
+        cluster_costs = 0.0
+        for i in range(n):
+            if solutions[x, i] == root:
+                cluster_costs += vertex_costs[x, i]
+        if sizes[x, root] != 0:
+            mnw = cluster_costs / sizes[x, root]
+        else:
+            print("Sizes = 0 bei Lösung:", x)
+            print("An Stelle:", root)
+        mnw_con += mnw
+    mnw_con = mnw_con / count
+    return mnw_con
+
+@njit
+def repair_merged_v6_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
+    sol_len = len(solution_costs)
+    ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
+    ccs = ccs_mndgr[0]
+    mean_ndgree = ccs_mndgr[1]
+    connectivity = np.zeros(sol_len, dtype=np.int8)
+
+    for s_center_i in range(len(ccs)):
+        # s_center soll klein genug sein
+        s_center = ccs[s_center_i]
+        if merged_sizes[s_center] > mean_ndgree[s_center_i] * big_border:
+            continue
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden).
+        best_fit = s_center
+        min_mwc = 1.7976931348623157e+308
+        for b_center_i in range(len(ccs)):
+            # b_center soll groß genug sein
+            b_center = ccs[b_center_i]
+            if merged_sizes[b_center] <= mean_ndgree[b_center_i] * big_border:
+                continue
+            # Falls Cluster zusammen deutlich zu groß wären, überspringt diese Kombination direkt.
+            # zu groß: mehr als 0.29 zusätzlich
+            # wegen 2/9 Fehlerrate maximal die von den 7/9 übrigen Kanten jeweils fehlen darf.
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
+                continue
+            for x in range(0,sol_len):
+                if parents[x, s_center] == parents[x, b_center]:
+                    connectivity[x] = 1
+                else:
+                    connectivity[x] = 0
+            # Berechne Gewicht:
+            mwc = mean_node_weight(s_center, connectivity, vertex_costs, parents, sizes, n)
             # Aktualisiere ggf. best-passenden Knoten und minimalen mwc
             if mwc == -1:
                 continue
