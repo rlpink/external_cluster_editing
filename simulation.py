@@ -155,9 +155,9 @@ def sim_until_nearly_connected_p(n, all_con_rates):
                 return
 
 
-# for lido experiments:
-arg_n = int(sys.argv[1])
-rand.seed(1234)
-for i in range(0,10000):
-    sim_until_nearly_connected_p(arg_n, np.arange(0.05,0.95, 0.025))
-
+if __name__ == '__main__':
+    # for lido experiments:
+    arg_n = int(sys.argv[1])
+    rand.seed(1234)
+    for i in range(0,10000):
+        sim_until_nearly_connected_p(arg_n, np.arange(0.05,0.95, 0.025))
