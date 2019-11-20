@@ -6,6 +6,7 @@ from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
 from numba.typed import Dict
+import pandas as pd
 """
 This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
 It contains two methods for the (best) generated raw solutions,
@@ -457,7 +458,7 @@ def repair_merged_v3_nd(merged, merged_sizes, solution_costs, vertex_costs, pare
     return result
 
 @njit
-def mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes, parents):
+def mean_weight_connected(s_center, connectivity, vertex_costs, sizes, parents):
     sol_len = len(connectivity)
     mwc = 0.0
     count = 0
@@ -469,18 +470,28 @@ def mean_weight_connected(s_center, b_center, connectivity, vertex_costs, sizes,
         return -1.0
     return mwc/count
 
+
 @njit
 def mean_weight_connected2(s_center, b_center, connectivity, vertex_costs, sizes, parents):
     sol_len = len(connectivity)
     mwc = 0.0
+    mwd = 0.0
     count = 0
+    countd = 0
     for i in range(sol_len):
         if connectivity[i]:
             mwc += vertex_costs[i, s_center] + vertex_costs[i, b_center]
             count += 1
+        else:
+            mwd += vertex_costs[i, s_center] + vertex_costs[i, b_center]
+            countd += 1
     if count == 0:
         return -1.0
-    return mwc/count
+    elif countd == 0:
+        return 1
+    cost_1 = mwc/count
+    cost_0 = mwd/countd
+    return (cost_0 - cost_1) / (cost_0 + cost_1)
 
 @njit
 def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
@@ -514,7 +525,7 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
                 else:
                     connectivity[x] = 0
             # Berechne Gewicht:
-            mwc = mean_weight_connected2(s_center, b_center, connectivity, vertex_costs, sizes, parents)
+            mwc = mean_weight_connected(s_center, connectivity, vertex_costs, sizes, parents)
             # Aktualisiere ggf. best-passenden Knoten und minimalen mwc
             if mwc == -1:
                 continue
@@ -527,6 +538,153 @@ def repair_merged_v4_nd_rem(merged, merged_sizes, solution_costs, vertex_costs, 
         # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
         merged_sizes[best_fit] += merged_sizes[s_center]
     return merged
+
+
+
+@njit
+def calculate_mean_nodedgr_array(merged, merged_sizes, node_dgree, cluster_centers):
+    cluster_mean_nodedgr = np.zeros(len(cluster_centers), dtype=np.int64)
+    for c in range(len(cluster_centers)):
+        for i in range(len(merged)):
+            if merged[i] == cluster_centers[c]:
+                cluster_mean_nodedgr[c] += node_dgree[i]
+        cluster_mean_nodedgr[c] /= merged_sizes[cluster_centers[c]]
+    cmn_array = np.zeros(len(merged), dtype=np.int64)
+    for i in range(len(cluster_centers)):
+        c = cluster_centers[i]
+        cmn_array[c] = cluster_mean_nodedgr[i]
+
+    return cmn_array
+
+
+def repair_merged_v4_rem_scan(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border, filename):
+    sol_len = len(solution_costs)
+    cluster_centers = pd.unique(merged)
+    mean_ndgree = calculate_mean_nodedgr_array(merged, merged_sizes, node_dgree, cluster_centers)
+    connectivity = np.zeros(sol_len, dtype=np.int8)
+    best_fits = np.zeros(n, dtype=np.int64)
+    min_mwcs = np.zeros(n, dtype = np.float64)
+
+    for i in range(n):
+        best_fits[i] = -1
+        min_mwcs[i] = 1.7976931348623157e+308
+
+    graph_file = open(filename, mode="r")
+
+    for line in graph_file:
+        # Kommentar-Zeilen überspringen
+        if line[0] == "#":
+            continue
+        splitted = line.split()
+        nodes = np.array(splitted[:-1], dtype=np.int64)
+        weight = np.float64(splitted[2])
+        i = nodes[0]
+        j = nodes[1]
+        # Nur positive Kanten berücksichtigen
+        if weight < 0:
+            continue
+        #Clusterzentren ermitteln
+        s_center = merged[i]
+        b_center = merged[j]
+        # ggf. Benennung ändern (b: big, s: small)
+        if merged_sizes[s_center] > merged_sizes[b_center]:
+            tmp = s_center
+            s_center = b_center
+            b_center = tmp
+        # Clustergrößen ermitteln
+        s_center_s = merged_sizes[s_center]
+        b_center_s = merged_sizes[b_center]
+
+        if b_center_s < big_border * mean_ndgree[b_center]:
+            continue
+        if s_center_s >= big_border * mean_ndgree[s_center]:
+            continue
+        if s_center_s + b_center_s > 1.29 * mean_ndgree[s_center]:
+            continue
+        if s_center_s + b_center_s > 1.29 * mean_ndgree[b_center]:
+            continue
+
+        for x in range(0,sol_len):
+            if parents[x, i] == parents[x, j]:
+                connectivity[x] = 1
+            else:
+                connectivity[x] = 0
+        # Berechne Gewicht:
+        mwc = mean_weight_connected(s_center, connectivity, vertex_costs, sizes, parents)
+        if mwc == -1:
+            continue
+        if mwc < min_mwcs[s_center]:
+            # Aktualisieren von Minimalen Kosten
+            min_mwcs[s_center] = mwc
+            best_fits[s_center] = b_center
+    # Laufe über alle großen Cluster (denen kleine zugewiesen wurden) und verbinde diese mit den günstigsten Kandidaten,
+    # bis das Cluster (deutlich) zu voll wäre.
+    bf_unique = pd.unique(best_fits)
+    for b_center in bf_unique:
+        # Wenn best_fits[i] == -1: wurde gar nicht befüllt (dh. i ist kein kleines Cluster oder wurde nie verbunden).
+        if b_center == -1:
+            continue
+        sorted_candidates = priority_candidates(b_center, best_fits, min_mwcs)
+        for s_center in sorted_candidates:
+            # Check ob aktuelle Größe noch passt (im Unterschied zu oben: Dort wird nur geguckt ob die Größen -vor- dem ersten Union passen würden
+            if merged_sizes[s_center] + merged_sizes[b_center] < 1.29 * mean_ndgree[b_center]:
+                rem_union(b_center, s_center, merged)
+                merged_sizes[b_center] += merged_sizes[s_center]
+    return merged
+
+
+def priority_candidates(b_center, best_fits, min_mwcs):
+    candidates = np.argwhere(best_fits == b_center).flatten()
+    sorted_i = np.argsort(min_mwcs[candidates])
+    return candidates[sorted_i]
+
+
+@njit
+def repair_merged_wd(merged, merged_sizes, solution_costs, vertex_costs, parents, sizes, n, node_dgree, big_border):
+    sol_len = len(solution_costs)
+    ccs_mndgr = calculate_mean_nodedgr_nd(merged, merged_sizes, node_dgree)
+    ccs = ccs_mndgr[0]
+    mean_ndgree = ccs_mndgr[1]
+    connectivity = np.zeros(sol_len, dtype=np.int8)
+
+    for s_center_i in range(len(ccs)):
+        # s_center soll klein genug sein
+        s_center = ccs[s_center_i]
+        if merged_sizes[s_center] > mean_ndgree[s_center_i] * big_border:
+            continue
+        # Detektiere und verbinde "Mini-Cluster" (Wurzel des Clusters soll verbunden werden);
+        # Reparatur wird versucht, wenn die Größe des Clusters weniger als halb so groß ist wie der Knotengrad angibt, dh. die lokale Fehlerrate wäre bei über 50% in der Probleminstanz.
+        best_fit = s_center
+        max_wd = -1
+        for b_center_i in range(len(ccs)):
+            # b_center soll groß genug sein
+            b_center = ccs[b_center_i]
+            if merged_sizes[b_center] <= mean_ndgree[b_center_i] * big_border:
+                continue
+            # Falls Cluster zusammen deutlich zu groß wären, überspringt diese Kombination direkt
+            if merged_sizes[s_center] + merged_sizes[b_center] > 1.29 * mean_ndgree[b_center_i]:
+                continue
+            for x in range(0,sol_len):
+                if parents[x, s_center] == parents[x, b_center]:
+                    connectivity[x] = 1
+                else:
+                    connectivity[x] = 0
+            # Berechne Gewicht:
+            wd = mean_weight_connected2(s_center, b_center, connectivity, vertex_costs, sizes, parents)
+            if wd > max_wd:
+                # Aktualisieren von Minimalen Kosten
+                max_wd = wd
+                best_fit = b_center
+
+        # if best_fit == s_center:
+        #     print("Knoten %d wurde nicht verbunden.\n" % (s_center))
+        # Verbinde das Cluster mit dem Cluster, das im Mittel für s_center am günstigsten ist.
+        rem_union(s_center, best_fit, merged)
+        # Wg. Rem: aktualisiere Größe direkt in Repräsentanten von später erneut betrachtetem best_fit
+        merged_sizes[best_fit] += merged_sizes[s_center]
+    return merged
+
+
 @njit
 def check_if_flat(solution):
     for i in range(len(solution)):

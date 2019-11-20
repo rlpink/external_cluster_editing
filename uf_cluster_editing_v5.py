@@ -224,7 +224,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
         for j in range(0,n):
             r = flattening_find(j, merged_solutions[i])
             merged_sizes[i, r] += 1
-        rep = repair_merged_v4_nd_rem(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3)
+        rep = repair_merged_v4_rem_scan(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3, filename)
         merged_solutions[i] = rep
     merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
     print(merged_costs)
