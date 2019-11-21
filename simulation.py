@@ -1,3 +1,6 @@
+"""
+This module holds the code for simulating data on graph connectivity. It can then be used to learn a model upon which can be used for choosing the sampling rate in unionfind cluster editing. It could also be used for further research.
+"""
 #from python_algorithms.basic import union_find
 #import importlib
 #from union_find import *
@@ -8,9 +11,6 @@ import numpy as np
 from numba import jit, njit
 from numpy import random as rand
 
-"""
-This module holds the code for simulating data on graph connectivity. It can then be used to learn a model upon which can be used for choosing the sampling rate in unionfind cluster editing. It could also be used for further research.
-"""
 
 #######################################################
 def initialize_union_find(n):
@@ -155,9 +155,9 @@ def sim_until_nearly_connected_p(n, all_con_rates):
                 return
 
 
-# for lido experiments:
-arg_n = int(sys.argv[1])
-rand.seed(1234)
-for i in range(0,10000):
-    sim_until_nearly_connected_p(arg_n, np.arange(0.05,0.95, 0.025))
-
+if __name__ == '__main__':
+    # for lido experiments:
+    arg_n = int(sys.argv[1])
+    rand.seed(1234)
+    for i in range(0,10000):
+        sim_until_nearly_connected_p(arg_n, np.arange(0.05,0.95, 0.025))

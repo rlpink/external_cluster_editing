@@ -1,3 +1,7 @@
+"""
+This module is not a module. It serves only one purpose, to be executed by a lido3-shell file.
+It starts experiments for the unionfind_cluster_editing() algorithm.
+"""
 from union_find import *
 from math import log
 import sys
@@ -10,10 +14,6 @@ import csv
 from uf_cluster_editing_v5 import *
 import datetime
 
-"""
-This module is not a module. It serves only one purpose, to be executed by a lido3-shell file.
-It starts experiments for the unionfind_cluster_editing() algorithm.
-"""
 
 filename = sys.argv[1]
 path = sys.argv[2]

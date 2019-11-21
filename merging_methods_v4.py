@@ -1,3 +1,8 @@
+"""
+This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
+It contains two methods for the (best) generated raw solutions,
+and, more importantly, methods to merge solutions into one better solution.
+"""
 from union_find import *
 from math import log
 import sys
@@ -7,11 +12,8 @@ from numpy import random as rand
 from model_sqrt import *
 from numba.typed import Dict
 import pandas as pd
-"""
-This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
-It contains two methods for the (best) generated raw solutions,
-and, more importantly, methods to merge solutions into one better solution.
-"""
+
+
 def best_solution(solution_costs, parents, filename, missing_weight, n, x):
     """
     This function outputs the best generated solution to a file named "result.txt".

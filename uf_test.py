@@ -1,3 +1,6 @@
+"""
+This module contains some basic tests for correctness of the union_find module.
+"""
 import numpy as np
 from numba import njit, jit
 from numpy import random as rand
@@ -6,9 +9,6 @@ import pytest
 from itertools import chain
 import datetime
 import pandas as pd
-"""
-This module contains some basic tests for correctness of the union_find module.
-"""
 
 def test_find():
     n = 10000
