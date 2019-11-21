@@ -1,3 +1,9 @@
+"""
+This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
+It contains two methods for the (best) generated raw solutions,
+and, more importantly, methods to merge solutions into one better solution.
+"""
+
 from union_find import *
 from math import log
 import sys
@@ -7,11 +13,6 @@ from numpy import random as rand
 from model_sqrt import *
 from numba.typed import Dict
 import pandas as pd
-"""
-This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
-It contains two methods for the (best) generated raw solutions,
-and, more importantly, methods to merge solutions into one better solution.
-"""
 
 
 def print_solution_costs(solution_costs, filename):
@@ -334,3 +335,18 @@ def priority_candidates(b_center, best_fits, min_mwcs):
     candidates = np.argwhere(best_fits == b_center).flatten()
     sorted_i = np.argsort(min_mwcs[candidates])
     return candidates[sorted_i]
+
+
+def undo_merge_repair(merged, rep, merged_vc, rep_vc):
+    new_sizes = np.zeros(len(merged), dtype=np.int64)
+    for i in range(len(merged)):
+        # Falls die Knotenkosten in der neuen Version echt größer sind als vorher, überschreibe den neuen Eintrag wieder mit dem alten Eintrag.
+        if rep_vc[i] > merged_vc[i]:
+            rep[i] = merged[i]
+    for i in range(len(merged)):
+        r = flattening_find(i, rep)
+        new_sizes[r] += 1
+    result = np.zeros((2,len(merged)), dtype=np.int64)
+    result[0] = rep
+    result[1] = new_sizes
+    return result

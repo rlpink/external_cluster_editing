@@ -5,7 +5,7 @@ import numpy as np
 from numba import njit, jit
 from numpy import random as rand
 from model_sqrt import *
-from merging_methods_v4 import *
+from merging_methods_v4_slim import *
 import csv
 
 """
@@ -20,7 +20,7 @@ This module implements a cluster editing algorithm. It uses a semi-streaming app
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
 
-def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
+def unionfind_cluster_editing(filename, missing_weight, n, x):
 
     """
     This is a cluster editing algorithm, based on semi-streaming approach using union find to analyze graph structures.
@@ -210,33 +210,44 @@ def unionfind_cluster_editing(filename, missing_weight, n, x, n_merges):
     good_costs_i = cost_sorted_i[top_percent]
     mid_costs_i = cost_sorted_i[mid_percent]
     # Artefakt aus Zeit mit n_merges > 1; sonst inkompatibel mit calculate_costs.
-    merged_solutions = np.full((n_merges,n), np.arange(n, dtype=np.int64))
-    merged_sizes = np.full((n_merges,n), np.zeros(n, dtype=np.int64))
-    for i in range(0,n_merges):
-        merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename)
-        merged_solutions[i] = merged[0]
-        merged_sizes[i] = merged[1]
-        merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
-        merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), n_merges)
-        print(merged_costs)
-        # Glätten der Lösung falls Baumstruktur auftritt
-        for j in range(0,n):
-            flattening_find(j, merged_solutions[i])
-        #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
-        rep = repair_merged_v4_scan(merged_solutions[i], merged_sizes[i], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3, filename)
-        merged_solutions[i] = rep[0]
-        merged_sizes[i] = rep[1]
-        # Sicherheitshalber noch mal glätten für Lösungsberechnung:
-        for j in range(0,n):
-            flattening_find(j, merged_solutions[i])
-    merged_costs = calculate_costs(merged_solutions, n_merges, True)[1]
-    print(merged_costs)
+    merged_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
+    final_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
+    merged_sizes = np.full((1,n), np.zeros(n, dtype=np.int64))
+    merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename)
+    merged_save = np.copy(merged[0])
+    merged_solutions[0] = merged[0]
+    merged_sizes[0] = merged[1]
+    merged_c = calculate_costs(merged_solutions, 1, True)
+    merged_costs = merged_c[1]
+    merged_vc = merged_c[0]
+    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), 1)
+    print(merged_costs[0])
+    # Glätten der Lösung falls Baumstruktur auftritt
+    for j in range(0,n):
+        flattening_find(j, merged_solutions[0])
+    #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
+    rep = repair_merged_v4_scan(merged_solutions[0], merged_sizes[0], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3, filename)
+    merged_solutions[0] = rep[0]
+    merged_sizes[0] = rep[1]
+    # Sicherheitshalber noch mal glätten für Lösungsberechnung:
+    for j in range(0,n):
+        flattening_find(j, merged_solutions[0])
+    rep_c = calculate_costs(merged_solutions, 1, True)
+    merged_costs = rep_c[1]
+    rep_vc = rep_c[0]
+    print(merged_costs[0])
+    mr_3 = undo_merge_repair(merged_save, rep[0], merged_vc[0], rep_vc[0])
+    final_solutions[0] = mr_3[0]
+    merged_sizes[0] = mr_3[1]
+    final_costs = calculate_costs(final_solutions, 1, True)
+    print(final_costs[1][0])
     # Da Merge-Repair auf weniger Lösungen basiert, nur diese angeben:
     x2 = len(mid_costs_i)
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, 1)
+    merged_to_file(final_solutions, final_costs[1], filename, missing_weight, n, x2, 1)
     #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
     #print_solution_costs(solution_costs[good_costs_i], filename)
-    #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, 1)
 
 @njit
 def check_if_flat(solution):
