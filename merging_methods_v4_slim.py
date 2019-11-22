@@ -14,13 +14,25 @@ from model_sqrt import *
 from numba.typed import Dict
 import pandas as pd
 
+def print_result(output_path, name, date):
+    file = open(output_path + name, mode="a")
+    file.write(str(date))
+    file.close()
 
-def print_solution_costs(solution_costs, filename):
+def print_zhk(output_path, merged, sizes):
+    file = open(output_path + "zhk_sizes.txt", mode="a")
+    for i in range(len(sizes)):
+        if merged[i] == i:
+            file.write(str(i) + " " + str(sizes[i]) + "\n")
+    file.close()
+
+
+def print_solution_costs(solution_costs, output_path):
     """
     This function outputs all sorted solution costs to a ifle named "..._solution_costs.txt".
     """
     sorted_costs = np.sort(solution_costs)
-    print_to = filename[:-4] + "_solution_costs_v4.txt"
+    print_to =  output_path + "solutions_v4.txt"
     with open(print_to, mode="a") as file:
         for cost in sorted_costs:
             file.write(str(cost))
@@ -45,18 +57,15 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n):
 
 
 
-def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
+def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges, output_path):
     """
     A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
     """
-    print_to = filename[:-4] + "_merged_v4.txt"
-    cost_sorted_j = np.argsort(costs)
+    print_to = output_path + "merged_v4.txt"
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions merged): %d\nmerged solutions:\n" % (filename, missing_weight, n, x))
-        for j in cost_sorted_j:
-            file.write(f"costs: {costs[j]}\n")
-            for i in range(0,n):
-                file.write(f"{solutions[j, i]} ")
+        for i in range(n):
+            file.write(f"{solutions[0, i]} ")
 
 def merged_short_print(solutions, costs, filename, missing_weight, n, x, n_merges):
     for j in range(n_merges):
@@ -117,7 +126,7 @@ def weighted_decision_scan(x, y, connectivity, f_vertex_costs, f_sizes, f_parent
     # Falls kein voriger Fall eintritt (Häufigkeit entscheidet/ Verhältnis liegt vor):
     return 0.0
 
-def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename):
+def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename, output_path):
     """
     First merge algorithm. It calculates cluster masks for each cluster center:
     True, if the node is in the same component with cluster center,
@@ -133,8 +142,10 @@ def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_w
     # Arrays anlegen für Vergleichbarkeit der Cluster:
     connectivity = np.zeros(sol_len, dtype=np.int8) #np.bool not supported
     graph_file = open(filename, mode="r")
-
+    l = 0
+    wd_f = open(output_path + "wd_v4.txt", mode = "a")
     for line in graph_file:
+        l += 1
         # Kommentar-Zeilen überspringen
         if line[0] == "#":
             continue
@@ -151,9 +162,11 @@ def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_w
         # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
         # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
         wd = weighted_decision_scan(i, j, connectivity, vertex_costs, sizes, parents)
+        wd_f.write(str(l) + " " + str(wd) +"\n")
         # Falls Gewicht groß genug:
         if wd > 0.05:
             union(i, j, merged_sol, merged_sizes)
+    wd_f.close()
     result = np.zeros((2,n))
     result[0] = merged_sol
     result[1] = merged_sizes

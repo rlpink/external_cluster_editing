@@ -20,7 +20,7 @@ This module implements a cluster editing algorithm. It uses a semi-streaming app
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
 
-def unionfind_cluster_editing(filename, missing_weight, n, x):
+def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
 
     """
     This is a cluster editing algorithm, based on semi-streaming approach using union find to analyze graph structures.
@@ -202,6 +202,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
     solution_costs = costs[1]
+    print_solution_costs(solution_costs, output_path)
     # Optimierung: Filtern der "besten" Lösungen, um eine solidere Basis für den Merge zu schaffen.
     # best_costs_i = np.argmin(solution_costs)
     # best_costs = solution_costs[best_costs_i]
@@ -223,9 +224,9 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
         merged_c = calculate_costs(merged_solutions, n_merges, True)
         merged_costs = merged_c[1]
         merged_vc = merged_c[0]
-        merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), n_merges)
+        #merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), n_merges)
         # Glätten der Lösung + Berechnung der korrekten merged_sizes (vorher 0, innerhalb calculate_costs berechnet aber nicht verändert)
-        print(merged_costs[0])
+        print_result(output_path, "merged_costs_v5.txt", merged_costs[0])
         for j in range(0,n):
             r = flattening_find(j, merged_solutions[i])
             merged_sizes[i, r] += 1
@@ -234,14 +235,14 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     merged_c = calculate_costs(merged_solutions, n_merges, True)
     merged_costs = merged_c[1]
     rep_vc = merged_c[0]
-    print(merged_costs[0])
+    print_result(output_path, "rep_v5.txt", merged_costs[0])
     final_solutions[0] = undo_merge_repair(merged_save, rep, merged_vc[0], rep_vc[0])
     final_costs = calculate_costs(final_solutions, 1, True)[1]
-    print(final_costs[0])
+    print_result(output_path, "final_v5.txt", final_costs[0])
     # Da Merge auf x2 Lösungen basiert, nur diese angeben:
     x2 = len(mid_costs_i)
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
-    merged_to_file(final_solutions, final_costs, filename, missing_weight, n, x2, n_merges)
+    #merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)
+    merged_to_file(final_solutions, final_costs, filename, missing_weight, n, x2, n_merges, output_path)
     #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
     #print_solution_costs(solution_costs[good_costs_i], filename)
     #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, n_merges)

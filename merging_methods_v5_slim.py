@@ -14,17 +14,23 @@ from model_sqrt import *
 from numba.typed import Dict
 import pandas as pd
 
+def print_result(output_path, name, date):
+    file = open(output_path + name, mode="a")
+    file.write(str(date))
+    file.close()
 
-def print_solution_costs(solution_costs, filename):
+
+def print_solution_costs(solution_costs, output_path):
     """
     This function outputs all sorted solution costs to a ifle named "..._solution_costs.txt".
     """
     sorted_costs = np.sort(solution_costs)
-    print_to = filename[:-4] + "_solution_costs_v5.txt"
+    print_to =  output_path + "solutions_v5.txt"
     with open(print_to, mode="a") as file:
         for cost in sorted_costs:
             file.write(str(cost))
             file.write("\n")
+
 
 def all_solutions(solution_costs, parents, filename, missing_weight, n):
     """
@@ -44,18 +50,15 @@ def all_solutions(solution_costs, parents, filename, missing_weight, n):
 
 
 
-def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges):
+def merged_to_file(solutions, costs, filename, missing_weight, n, x, n_merges, output_path):
     """
     A function to write the merged solution(s) to a file, named like the input instance ending with _merged.txt.
     """
-    print_to = filename[:-4] + "_merged_v4.txt"
-    cost_sorted_j = np.argsort(costs)
+    print_to = output_path + "merged_v5.txt"
     with open(print_to, mode="a") as file:
         file.write("filename: %s \nmissing_weight: %f \nn: %d \nx (solutions merged): %d\nmerged solutions:\n" % (filename, missing_weight, n, x))
-        for j in cost_sorted_j:
-            file.write(f"costs: {costs[j]}\n")
-            for i in range(0,n):
-                file.write(f"{solutions[j, i]} ")
+        for i in range(n):
+            file.write(f"{solutions[0, i]} ")
 
 def merged_short_print(solutions, costs, filename, missing_weight, n, x, n_merges):
     for j in range(n_merges):

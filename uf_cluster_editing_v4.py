@@ -20,7 +20,7 @@ This module implements a cluster editing algorithm. It uses a semi-streaming app
 # n: Anzahl Objekte/Knoten
 # x: Anzahl generierter Lösungen (mehr = besser, aber teurer in Speicher/Laufzeit)
 
-def unionfind_cluster_editing(filename, missing_weight, n, x):
+def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
 
     """
     This is a cluster editing algorithm, based on semi-streaming approach using union find to analyze graph structures.
@@ -194,7 +194,7 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
         mean_costs_c[i] = mean_costs_c[i]/c_count[i]
     # c_opt ist Parameter mit geringsten Durchschnittskosten der Lösungen
     c_opt = np.argsort(mean_costs_c)[0]
-
+    print_result(output_path, "c_opt_v4.txt", c_opt)
     generate_solutions(False, c_opt)
     costs = calculate_costs(parents, x, False)
     vertex_costs = costs[0]
@@ -213,15 +213,16 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     merged_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
     final_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((1,n), np.zeros(n, dtype=np.int64))
-    merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename)
+    merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename, output_path)
     merged_save = np.copy(merged[0])
     merged_solutions[0] = merged[0]
     merged_sizes[0] = merged[1]
     merged_c = calculate_costs(merged_solutions, 1, True)
     merged_costs = merged_c[1]
     merged_vc = merged_c[0]
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), 1)
-    print(merged_costs[0])
+    #merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, len(good_costs_i), 1)
+    print_result(output_path, "merged_cost_v4.txt", merged_costs[0])
+    print_zhk(output_path, merged_solutions[0], merged_sizes[0])
     # Glätten der Lösung falls Baumstruktur auftritt
     for j in range(0,n):
         flattening_find(j, merged_solutions[0])
@@ -235,16 +236,16 @@ def unionfind_cluster_editing(filename, missing_weight, n, x):
     rep_c = calculate_costs(merged_solutions, 1, True)
     merged_costs = rep_c[1]
     rep_vc = rep_c[0]
-    print(merged_costs[0])
+    print_result(output_path, "rep_v4.txt", merged_costs[0])
     mr_3 = undo_merge_repair(merged_save, rep[0], merged_vc[0], rep_vc[0])
     final_solutions[0] = mr_3[0]
     merged_sizes[0] = mr_3[1]
     final_costs = calculate_costs(final_solutions, 1, True)
-    print(final_costs[1][0])
+    print_result(output_path, "final_v4.txt", final_costs[1][0])
     # Da Merge-Repair auf weniger Lösungen basiert, nur diese angeben:
     x2 = len(mid_costs_i)
-    merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, 1)
-    merged_to_file(final_solutions, final_costs[1], filename, missing_weight, n, x2, 1)
+    #merged_to_file(merged_solutions, merged_costs, filename, missing_weight, n, x2, 1)
+    merged_to_file(final_solutions, final_costs[1], filename, missing_weight, n, x2, 1, output_path)
     #all_solutions(solution_costs[good_costs_i], parents[good_costs_i], filename, missing_weight, n)
     #print_solution_costs(solution_costs[good_costs_i], filename)
     #merged_short_print(merged_solutions, merged_costs, filename, missing_weight, n, x2, 1)
