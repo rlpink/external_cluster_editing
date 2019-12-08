@@ -129,7 +129,7 @@ def weighted_decision_scan(x, y, connectivity, f_vertex_costs, f_sizes, f_parent
     return 0.0
 
 
-def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename):
+def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename, union_threshold):
     """
     First merge algorithm. It calculates cluster masks for each cluster center:
     True, if the node is in the same component with cluster center,
@@ -164,7 +164,7 @@ def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_w
         # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
         wd = weighted_decision_scan(i, j, connectivity, vertex_costs, sizes, parents)
         # Falls Gewicht groß genug:
-        if wd > 0.05:
+        if wd > union_threshold:
             rem_union(i, j, merged_sol)
 
     return merged_sol

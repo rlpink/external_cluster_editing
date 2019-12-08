@@ -1,7 +1,9 @@
 """
 This module implements several methods for calculating and outputting solutions of the unionfind_cluster_editing() algorithm.
-It contains two methods for the (best) generated raw solutions,
+It contains some methods to print solutions
 and, more importantly, methods to merge solutions into one better solution.
+There are 3 main algorithms: merge, repair and undo.
+Two repair algorithms with differing complexity are implemented.
 """
 
 from union_find import *
@@ -126,7 +128,7 @@ def weighted_decision_scan(x, y, connectivity, f_vertex_costs, f_sizes, f_parent
     # Falls kein voriger Fall eintritt (Häufigkeit entscheidet/ Verhältnis liegt vor):
     return 0.0
 
-def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename, output_path):
+def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_weight, n, filename, output_path, union_threshold):
     """
     First merge algorithm. It calculates cluster masks for each cluster center:
     True, if the node is in the same component with cluster center,
@@ -143,7 +145,7 @@ def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_w
     connectivity = np.zeros(sol_len, dtype=np.int8) #np.bool not supported
     graph_file = open(filename, mode="r")
     l = 0
-    wd_f = open(output_path + "wd_v4.txt", mode = "a")
+    #wd_f = open(output_path + "wd_v4.txt", mode = "a")
     for line in graph_file:
         l += 1
         # Kommentar-Zeilen überspringen
@@ -162,11 +164,11 @@ def merged_solution_scan(solution_costs, vertex_costs, parents, sizes, missing_w
         # Berechne Zugehörigkeit zu Cluster (bzw. oder Nicht-Zugehörigkeit)
         # Alle vorigen Knoten waren schon als Zentrum besucht und haben diesen Knoten daher schon mit sich verbunden (bzw. eben nicht) - Symmetrie der Kosten!
         wd = weighted_decision_scan(i, j, connectivity, vertex_costs, sizes, parents)
-        wd_f.write(str(l) + " " + str(wd) +"\n")
+        #wd_f.write(str(l) + " " + str(wd) +"\n")
         # Falls Gewicht groß genug:
-        if wd > 0.05:
+        if wd > union_threshold:
             union(i, j, merged_sol, merged_sizes)
-    wd_f.close()
+    #wd_f.close()
     result = np.zeros((2,n))
     result[0] = merged_sol
     result[1] = merged_sizes

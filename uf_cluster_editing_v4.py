@@ -9,7 +9,7 @@ from merging_methods_v4_slim import *
 import csv
 
 """
-This module implements a cluster editing algorithm. It uses a semi-streaming approach and is therefore able to process files that would be too big for main memory.
+This module implements a cluster editing algorithm. It uses a semi-streaming approach and is therefore able to process files that would be too big for main memory. This is the classical version of uf_ce, there is a second approach available using rem's algorithm instead of union-find.
 """
 
 # Input sollte aus je 3 mit Leerzeichen getrennten Einträgen pro Zeile bestehen:
@@ -30,6 +30,11 @@ def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
     Parameter n gives the number of objects (nodes)
     Parameter x is the number of generated solutions (which are the basis for a merged solution). It merely influences running time, however with limited memory it should not be chosen too high. 300-1k is recommended, the more the better.
     """
+    merge_filter = 0.1
+    repair_filter = 0.9
+    union_threshold = 0.05
+    big_border = 0.3
+
     graph_file = open(filename, mode="r")
 
 
@@ -200,12 +205,8 @@ def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
     vertex_costs = costs[0]
     solution_costs = costs[1]
     # Optimierung: Filtern der "besten" Lösungen, um eine solidere Basis für den Merge zu schaffen.
-    # best_costs_i = np.argmin(solution_costs)
-    # best_costs = solution_costs[best_costs_i]
-    # good_costs_i = np.where(solution_costs <= best_costs * 1.7)
-    # Variante 2: Beste 10% verwenden
-    top_percent = range(np.int64(x*0.1))
-    mid_percent = range(np.int64(x*0.9))
+    top_percent = range(np.int64(x*merge_filter))
+    mid_percent = range(np.int64(x*repair_filter))
     cost_sorted_i = np.argsort(solution_costs)
     good_costs_i = cost_sorted_i[top_percent]
     mid_costs_i = cost_sorted_i[mid_percent]
@@ -213,7 +214,7 @@ def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
     merged_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
     final_solutions = np.full((1,n), np.arange(n, dtype=np.int64))
     merged_sizes = np.full((1,n), np.zeros(n, dtype=np.int64))
-    merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename, output_path)
+    merged = merged_solution_scan(solution_costs[good_costs_i], vertex_costs[good_costs_i], parents[good_costs_i], sizes[good_costs_i], missing_weight, n, filename, output_path, union_threshold)
     merged_save = np.copy(merged[0])
     merged_solutions[0] = merged[0]
     merged_sizes[0] = merged[1]
@@ -227,7 +228,7 @@ def unionfind_cluster_editing(filename, output_path, missing_weight, n, x):
     for j in range(0,n):
         flattening_find(j, merged_solutions[0])
     #rep = repair_merged(merged_solutions[i], merged_sizes[i], solution_costs, vertex_costs, parents, sizes, n, node_dgr)
-    rep = repair_merged_v4_scan(merged_solutions[0], merged_sizes[0], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, 0.3, filename)
+    rep = repair_merged_v4_scan(merged_solutions[0], merged_sizes[0], solution_costs[mid_costs_i], vertex_costs[mid_costs_i], parents[mid_costs_i], sizes[mid_costs_i], n, node_dgr, big_border, filename)
     merged_solutions[0] = rep[0]
     merged_sizes[0] = rep[1]
     # Sicherheitshalber noch mal glätten für Lösungsberechnung:

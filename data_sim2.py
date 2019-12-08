@@ -164,9 +164,9 @@ def generate_clusterarray(k_cluster, cluster_size):
         result[i] = cluster_size
     return result
 
-#arg_n_c = int(sys.argv[1])
-#arg_cluster_size = int(sys.argv[2])
-#arg_del_fac = float(sys.argv[3])
-#arg_ins_fac = float(sys.argv[4])
-#clusters = generate_clusterarray(arg_n, arg_cluster_size)
-#simulate_graph(123, clusters, arg_del_fac, arg_ins_fac)
+arg_n_c = int(sys.argv[1])
+arg_cluster_size = int(sys.argv[2])
+arg_del_fac = 0.15
+arg_ins_fac = 0.15
+clusters = generate_clusterarray(arg_n, arg_cluster_size)
+simulate_graph(123, clusters, arg_del_fac, arg_ins_fac)
